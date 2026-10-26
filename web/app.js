@@ -1,5 +1,6 @@
 import { buildIndex, search, defaultVariant, hasPriceSpread, nowPrice, normalize } from './search.js';
 import { calc, fmtTwd, parseJpy } from './calc.js';
+import { scanSupported, startScan } from './scanner.js';
 
 const BRANDS = ['UQ', 'GU', 'MUJI'];
 const LABEL = { UQ: 'UNIQLO', GU: 'GU', MUJI: 'MUJI' };
@@ -18,6 +19,7 @@ const state = {
   detail: null,        // { entry, matchedId, variant }
   jpyStr: '',
   convStr: '',         // 首頁換算
+  scanned: '',         // 最近一次掃到的條碼
   taxRate: 10,
 };
 
@@ -103,6 +105,7 @@ function imgHtml(rec, cls, svgSize) {
 // ---------- 畫面 ----------
 
 function render() {
+  stopMoreObserver();
   const inDetail = !!state.detail;
   $('#searchBar').hidden = inDetail;
   $('#clear').hidden = !state.query;
@@ -202,14 +205,22 @@ function renderEmpty(r) {
     <div class="empty">
       <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="#8A939D" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5M8.5 8.5l5 5M13.5 8.5l-5 5"/></svg>
       <h2>${num ? `台灣官網查無編號「${esc(q)}」` : `台灣官網查無「${esc(q)}」`}</h2>
+      ${scanNote(q)}
       <div class="card">${tips.map((t) => `<p>・${esc(t)}</p>`).join('')}</div>
       ${state.loaded ? '' : '<p class="result-header">資料載入中…</p>'}
     </div>`;
 }
 
+// 掃到的條碼查無時提醒：UQ/GU 吊牌條碼不一定是 6 位數商品編號
+function scanNote(q) {
+  if (!state.scanned || normalize(q) !== normalize(state.scanned)) return '';
+  return `<div class="notice">掃到的條碼是「${esc(state.scanned)}」。UNIQLO、GU 吊牌上的條碼不一定等於商品編號，請改輸入吊牌上的 6 位數編號。</div>`;
+}
+
 let lastResults = [];
 
 function renderResults(r) {
+  stopMoreObserver();
   lastResults = r.items;
   const q = state.query.trim();
   let header;
@@ -232,11 +243,21 @@ function renderResults(r) {
   content.innerHTML = `<div class="results">${header}<div class="grid">${cards}</div>${more}</div>`;
   const sentinel = $('#more');
   if (sentinel && 'IntersectionObserver' in window) {
-    const io = new IntersectionObserver((es) => {
-      if (es.some((e) => e.isIntersecting)) { io.disconnect(); state.shown += PAGE; renderResults(r); }
+    moreObserver = new IntersectionObserver((es) => {
+      // 只有畫面還是這一組結果時才載入更多（避免舊的偵測點蓋掉新搜尋或詳細頁）
+      if (!es.some((e) => e.isIntersecting) || !sentinel.isConnected || state.detail) return;
+      stopMoreObserver();
+      state.shown += PAGE;
+      renderResults(r);
     }, { rootMargin: '400px' });
-    io.observe(sentinel);
+    moreObserver.observe(sentinel);
   }
+}
+
+let moreObserver = null;
+function stopMoreObserver() {
+  if (moreObserver) moreObserver.disconnect();
+  moreObserver = null;
 }
 
 function openDetail(entry, matchedId, push = true) {
@@ -345,18 +366,16 @@ function renderCalc() {
 
 // ---------- 事件 ----------
 
-let composing = false;
 function onQuery() {
-  if (composing) return; // 中文輸入法選字中先不搜尋
   state.query = input.value;
   state.shown = PAGE;
   const r = search(state.index, state.query, state.brand);
   if (r.mode === 'exact' && r.jump) return openDetail(r.jump.entry, r.jump.matchedId);
   render();
 }
-input.addEventListener('compositionstart', () => { composing = true; });
-input.addEventListener('compositionend', () => { composing = false; onQuery(); });
-input.addEventListener('input', onQuery);
+// 中文輸入法選字中先不搜尋；看每次輸入事件本身，不用旗標（選字中途失焦時旗標會卡住）
+input.addEventListener('input', (e) => { if (!e.isComposing) onQuery(); });
+input.addEventListener('compositionend', onQuery);
 // 輸入完收起鍵盤：按「完成／Enter」，或點畫面其他地方
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && e.target.matches('input') && !e.isComposing) e.target.blur();
@@ -428,7 +447,55 @@ content.addEventListener('input', (e) => {
 });
 
 window.addEventListener('popstate', () => {
+  if (scanning) return stopScan();
   if (state.detail) closeDetail();
+});
+
+// ---------- 掃描條碼 ----------
+
+let scanning = null;
+const scanBtn = $('#scan');
+const scanner = $('#scanner');
+scanBtn.hidden = !scanSupported();
+
+function stopScan() {
+  if (!scanning) return;
+  const s = scanning;
+  scanning = null;
+  s.stop();
+  scanner.hidden = true;
+}
+
+scanBtn.addEventListener('click', async () => {
+  if (scanning) return;
+  $('#scanHint').textContent = '把吊牌上的條碼對準框內';
+  scanner.hidden = false;
+  history.pushState({ scan: true }, '');
+  scanning = startScan($('#scanVideo'));
+  let code = null;
+  try {
+    code = await scanning.promise;
+  } catch (e) {
+    $('#scanHint').textContent = e && e.name === 'NotAllowedError'
+      ? '無法使用相機：請在瀏覽器設定允許這個網頁使用相機。'
+      : '無法開啟相機，請改用手動輸入。';
+    return;
+  }
+  if (!scanning) return; // 已取消
+  scanning = null;
+  scanner.hidden = true;
+  if (history.state && history.state.scan) history.back();
+  if (!code) return;
+  if (navigator.vibrate) navigator.vibrate(60);
+  state.scanned = code;
+  input.value = code;
+  // 等 history.back() 的 popstate 處理完再搜尋，避免剛打開的詳細頁被關掉
+  setTimeout(onQuery, 50);
+});
+
+$('#scanCancel').addEventListener('click', () => {
+  if (history.state && history.state.scan) history.back();
+  else stopScan();
 });
 
 // ---------- 啟動 ----------
