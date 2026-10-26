@@ -3,6 +3,21 @@
 
 規格見 [SPEC.md](SPEC.md)，資料來源探勘見 [docs/recon.md](docs/recon.md)。
 
+## 網頁（第 3 階段）
+
+`web/` 是手機網頁（PWA），純 HTML／JS，不需要建置。`.github/workflows/pages.yml` 會把它和 `data` 分支的最新資料一起發布到 GitHub Pages：
+推送 `web/` 到 main、或每日資料更新跑完時自動發布。
+
+**第一次要先開啟 Pages**：儲存庫 Settings → Pages → Build and deployment 的 Source 選「GitHub Actions」。
+
+**本機預覽**：
+
+```sh
+mkdir -p web/data && for f in uq gu muji fx; do git show origin/data:$f.json > web/data/$f.json; done
+cd web && python3 -m http.server 8000   # 開 http://localhost:8000
+node --test web/tests/*.test.mjs        # 計算與搜尋的測試（在專案根目錄執行）
+```
+
 ## 每日資料更新
 
 GitHub Actions（`.github/workflows/update-data.yml`）每天台灣時間 06:00 執行，結果發布到 `data` 分支：

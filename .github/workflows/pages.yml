@@ -1,0 +1,43 @@
+name: 發布網頁
+
+on:
+  push:
+    branches: [main]
+    paths: ["web/**", ".github/workflows/pages.yml"]
+  workflow_run:
+    workflows: ["每日資料更新"]
+    types: [completed]
+  workflow_dispatch:
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.event != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: 組合網頁與最新資料
+        run: |
+          mkdir -p _site
+          cp -r web/. _site/
+          rm -rf _site/tests _site/data
+          mkdir -p _site/data
+          git fetch --depth=1 origin data
+          for f in uq gu muji fx; do git show FETCH_HEAD:$f.json > _site/data/$f.json; done
+          ls -la _site _site/data
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4

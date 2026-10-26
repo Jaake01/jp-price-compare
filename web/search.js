@@ -1,0 +1,86 @@
+// 搜尋（SPEC「搜尋框」）。純函式，方便測試。
+
+const DASHES = /[\s\-‐‑‒–—―]/g;
+
+// 全形轉半形、轉小寫、去掉空白與連字號
+export function normalize(s) {
+  return String(s || '').normalize('NFKC').toLowerCase().replace(DASHES, '');
+}
+
+export function isNumeric(q) {
+  return /^\d+$/.test(q);
+}
+
+// 目前售價（有特價用特價）
+export const nowPrice = (v) => (v.salePrice != null ? v.salePrice : v.price);
+
+export function buildIndex(datasets) {
+  const entries = [];
+  const byId = new Map();
+  for (const [brand, data] of Object.entries(datasets)) {
+    for (const rec of (data && data.items) || []) {
+      const ids = new Set([rec.id, ...(rec.altIds || []), ...(rec.variants || []).flatMap((v) => v.ids || [])].map(normalize));
+      const e = { brand, rec, ids: [...ids], name: normalize(rec.name), cat: normalize(rec.category) };
+      entries.push(e);
+      for (const id of ids) {
+        if (!byId.has(id)) byId.set(id, []);
+        byId.get(id).push(e);
+      }
+    }
+  }
+  return { entries, byId };
+}
+
+/**
+ * 回傳 { mode, q, items: [{entry, matchedId}], ambiguous, jump }
+ * mode：empty | exact | prefix | text
+ * jump：完全吻合只有 1 件、且沒有更長的編號以它開頭時，直接打開的那件
+ */
+export function search(index, query, brand = 'ALL') {
+  const q = normalize(query);
+  if (!q) return { mode: 'empty', q, items: [] };
+  if (isNumeric(q)) {
+    const exact = index.byId.get(q) || [];
+    const prefix = [];
+    for (const e of index.entries) {
+      const id = e.ids.find((i) => i.startsWith(q) && i !== q);
+      if (id && !exact.includes(e)) prefix.push({ entry: e, matchedId: id });
+    }
+    if (exact.length) {
+      const items = exact.map((e) => ({ entry: e, matchedId: q }));
+      const ambiguous = new Set(exact.map((e) => e.brand)).size > 1;
+      const jump = exact.length === 1 && prefix.length === 0 ? items[0] : null;
+      return { mode: 'exact', q, items, ambiguous, jump };
+    }
+    prefix.sort((a, b) => a.matchedId.length - b.matchedId.length || a.matchedId.localeCompare(b.matchedId));
+    return { mode: 'prefix', q, items: prefix };
+  }
+  const ranked = [];
+  for (const e of index.entries) {
+    if (brand !== 'ALL' && e.brand !== brand) continue;
+    let rank = -1;
+    if (e.name.startsWith(q)) rank = 0;
+    else if (e.name.includes(q)) rank = 1;
+    else if (e.cat.includes(q)) rank = 2;
+    if (rank >= 0) ranked.push({ rank, entry: e });
+  }
+  ranked.sort((a, b) => a.rank - b.rank);
+  return { mode: 'text', q, items: ranked.map((r) => ({ entry: r.entry, matchedId: null })) };
+}
+
+// 詳細頁預設選的顏色：搜尋的編號所在的顏色；否則選最高售價（保守計算）
+export function defaultVariant(rec, matchedId) {
+  const vs = rec.variants || [];
+  if (!vs.length) return null;
+  if (matchedId) {
+    const hit = vs.find((v) => (v.ids || []).map(normalize).includes(matchedId));
+    if (hit) return hit;
+  }
+  return vs.reduce((best, v) => (nowPrice(v) > nowPrice(best) ? v : best), vs[0]);
+}
+
+// 顏色之間價格是否不同
+export function hasPriceSpread(rec) {
+  const set = new Set((rec.variants || []).map((v) => nowPrice(v) + '/' + v.price));
+  return set.size > 1;
+}
