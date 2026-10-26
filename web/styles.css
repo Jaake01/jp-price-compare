@@ -130,8 +130,11 @@ button, input { font-family: inherit; }
 .tax-chip::after { content: ''; position: absolute; inset: -4px 0; } /* 觸控區至少 44px */
 .tax-chip[aria-pressed="true"] { background: #15191E; color: #FFFFFF; border-color: #15191E; }
 
-.calc-row { display: flex; justify-content: space-between; font-size: 14px; }
+.calc-row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: 14px; }
 .calc-row span:first-child { color: var(--text-2); }
+.calc-row .num { font-weight: 400; }
+.calc-row.main span:first-child { color: var(--text); font-weight: 700; }
+.calc-row.main .num { font-size: 22px; font-weight: 700; }
 .diff-box { display: flex; flex-direction: column; gap: 2px; padding: 12px; border-radius: 10px; }
 .diff-box.cheaper { background: var(--accent-bg); color: var(--accent); }
 .diff-box.pricier { background: var(--warn-bg); color: var(--warn); }

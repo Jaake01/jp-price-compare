@@ -4,7 +4,7 @@ export const REFUND_MIN_EX_TAX = 5000; // 同店同日未稅滿 ¥5,000
 
 export function calc(jpyInclTax, taxRatePct, rate, twPrice) {
   const exTax = Math.round(jpyInclTax / (1 + taxRatePct / 100));
-  const pay = jpyInclTax * rate;     // 刷卡當下台幣
+  const pay = jpyInclTax * rate;     // 換算台幣（刷卡當下）
   const refund = exTax * rate;       // 退稅後台幣
   const diff = twPrice - refund;     // 正數 = 日本比較便宜
   const pct = twPrice ? Math.round((Math.abs(diff) / twPrice) * 100) : 0;
