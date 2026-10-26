@@ -142,7 +142,7 @@ function renderHome() {
       <div class="card">
         <h2><label for="convJpy">日幣換算</label></h2>
         <div class="jpy-box"><span class="yen">¥</span>
-          <input id="convJpy" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" placeholder="輸入含稅日幣，例如 3990" value="${esc(state.convStr)}">
+          <input id="convJpy" type="text" inputmode="numeric" enterkeyhint="done" pattern="[0-9]*" autocomplete="off" placeholder="輸入含稅日幣，例如 3990" value="${esc(state.convStr)}">
         </div>
         <div class="tax-row"><span class="label">稅率</span>${taxChipsHtml()}</div>
         <div id="convOut"></div>
@@ -303,7 +303,7 @@ function renderDetail() {
       <div class="card">
         <label for="jpy" class="jpy-label">日本吊牌價（含稅）</label>
         <div class="jpy-box"><span class="yen">¥</span>
-          <input id="jpy" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" placeholder="例如 3990" value="${esc(state.jpyStr)}">
+          <input id="jpy" type="text" inputmode="numeric" enterkeyhint="done" pattern="[0-9]*" autocomplete="off" placeholder="例如 3990" value="${esc(state.jpyStr)}">
         </div>
         <div class="tax-row"><span class="label">稅率</span>${taxChipsHtml()}</div>
       </div>
@@ -357,7 +357,20 @@ function onQuery() {
 input.addEventListener('compositionstart', () => { composing = true; });
 input.addEventListener('compositionend', () => { composing = false; onQuery(); });
 input.addEventListener('input', onQuery);
-input.addEventListener('keydown', (e) => { if (e.key === 'Enter') input.blur(); });
+// 輸入完收起鍵盤：按「完成／Enter」，或點畫面其他地方
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && e.target.matches('input') && !e.isComposing) e.target.blur();
+});
+document.addEventListener('pointerdown', (e) => {
+  const box = e.target.closest('.search-box, .jpy-box');
+  if (box) {
+    // 點到框內的 ¥ 或空白處：把焦點放到輸入框，不收起
+    if (!e.target.closest('input, button')) { e.preventDefault(); box.querySelector('input').focus(); }
+    return;
+  }
+  const el = document.activeElement;
+  if (el && el.matches('input')) el.blur();
+}, true);
 
 $('#clear').addEventListener('click', () => {
   input.value = '';
