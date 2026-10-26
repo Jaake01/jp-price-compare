@@ -1,6 +1,9 @@
+import json
+import os
+import tempfile
 import unittest
 
-from crawler import fastretailing, health, muji
+from crawler import fastretailing, health, issues, muji
 
 
 def fr_product(code, pc, name, origin, current, styles, colors=None, pic="/hmall/test/x/1.jpg"):
@@ -137,6 +140,26 @@ class HealthTest(unittest.TestCase):
         self.assertTrue(health.check_fx({"rate": 0.205}, {"rate": 0.204})[0])
         self.assertFalse(health.check_fx({"rate": 0.31}, None)[0])
         self.assertFalse(health.check_fx({"rate": 0.22}, {"rate": 0.205})[0])  # +7.3%
+
+
+class IssuesTest(unittest.TestCase):
+    def test_write_output_for_actions(self):
+        with tempfile.NamedTemporaryFile("r+", encoding="utf-8", delete=False) as f:
+            path = f.name
+        os.environ["GITHUB_OUTPUT"] = path
+        try:
+            issues.write_output("new_issues", [{"brand": "GU", "number": 3, "errors": ["壞了"]}])
+            line = open(path, encoding="utf-8").read().strip()
+        finally:
+            del os.environ["GITHUB_OUTPUT"]
+            os.remove(path)
+        name, value = line.split("=", 1)
+        self.assertEqual(name, "new_issues")
+        self.assertEqual(json.loads(value)[0]["number"], 3)
+
+    def test_write_output_noop_locally(self):
+        os.environ.pop("GITHUB_OUTPUT", None)
+        issues.write_output("new_issues", [])  # 不應出錯
 
 
 if __name__ == "__main__":

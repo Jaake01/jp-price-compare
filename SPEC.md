@@ -156,6 +156,7 @@
 4. **進階（可後做）**：Claude Code 自動修復 Action、掃描條碼、新增品牌。
    - 掃描條碼：只用瀏覽器內建的 BarcodeDetector（Android Chrome；iPhone 不顯示掃描按鈕，2026-10-26 決定不加外部函式庫）。掃到的號碼照一般編號搜尋；查無時顯示掃到的號碼，並提醒 UNIQLO／GU 吊牌條碼不一定是 6 位數商品編號。
    - [ ] 在日本店內實測：MUJI 吊牌 JAN、UNIQLO／GU 吊牌條碼各掃幾件，確認掃到的號碼是什麼
+   - 自動修復：每日更新「新開」失敗 Issue 時（已開著的 Issue 每天留言不會重跑），`update-data.yml` 的 `autofix` 工作用 Claude Code GitHub Action 讀錯誤、小量重現、只改 `crawler/`、`tests/` 並跑單元測試。有修改就推到 `autofix/品牌-執行編號` 分支，在 Issue 留言附「建立 PR」連結，由我確認合併；修不了也會留言說明。需在儲存庫 Secrets 設定 `CLAUDE_CODE_OAUTH_TOKEN`（或 `ANTHROPIC_API_KEY`），沒設定就略過。
 
 ## 給 Claude Code 的第一段指示
 

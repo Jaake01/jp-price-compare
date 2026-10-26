@@ -13,6 +13,10 @@ on:
       muji_pdp_limit:
         description: "這次最多抓幾個 MUJI 商品頁補 JAN"
         default: "500"
+      test_autofix:
+        description: "故意失敗時也測試自動修復（會用到 Claude 額度）"
+        type: boolean
+        default: false
   pull_request:
     paths-ignore: ["docs/**", "*.md"]
 
@@ -68,6 +72,8 @@ jobs:
     permissions:
       contents: write
       issues: write
+    outputs:
+      new_issues: ${{ steps.issues.outputs.new_issues || '[]' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -106,8 +112,85 @@ jobs:
           git push -f "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" data
 
       - name: 開／更新／關閉 Issue
+        id: issues
         if: always() && hashFiles('report.json') != ''
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: python -m crawler.issues report.json
+
+  # 新開「資料更新失敗」Issue 時，讓 Claude 試著修爬蟲。有修改就推到 autofix/ 分支並在 Issue 附上建立 PR 的連結。
+  # 需要在儲存庫 Secrets 設定 CLAUDE_CODE_OAUTH_TOKEN（或 ANTHROPIC_API_KEY）；沒設定就略過。
+  autofix:
+    needs: update
+    if: >-
+      needs.update.outputs.new_issues != '[]' &&
+      (github.event_name == 'schedule' || inputs.force_fail == 'none' || inputs.test_autofix)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      issues: write
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        issue: ${{ fromJSON(needs.update.outputs.new_issues) }}
+    env:
+      HAS_CLAUDE: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN != '' || secrets.ANTHROPIC_API_KEY != '' }}
+      BRAND: ${{ matrix.issue.brand }}
+      ISSUE: ${{ matrix.issue.number }}
+      ERRORS: ${{ toJSON(matrix.issue.errors) }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: 沒有設定 Claude 金鑰
+        if: env.HAS_CLAUDE != 'true'
+        run: echo "::notice::未設定 CLAUDE_CODE_OAUTH_TOKEN 或 ANTHROPIC_API_KEY，略過自動修復。"
+      - uses: actions/checkout@v4
+        if: env.HAS_CLAUDE == 'true'
+      - uses: actions/setup-python@v5
+        if: env.HAS_CLAUDE == 'true'
+        with:
+          python-version: "3.12"
+      - name: Claude 嘗試修復爬蟲
+        if: env.HAS_CLAUDE == 'true'
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_args: |
+            --max-turns 40
+            --allowedTools Read,Edit,Write,Glob,Grep,Bash(python:*),Bash(python3:*),Bash(curl:*),Bash(git diff:*),Bash(git status:*),Bash(ls:*),Bash(cat:*)
+          prompt: |
+            你在幫一個每日比價爬蟲修 bug（請用繁體中文寫說明）。
+            每日資料更新時，品牌「${{ matrix.issue.brand }}」失敗了，錯誤如下：
+            ${{ toJSON(matrix.issue.errors) }}
+
+            背景：先讀 SPEC.md「爬蟲與自動維護」「資料規格」和 docs/recon.md，爬蟲在 crawler/。
+            1. 用小量抓取重現：python -m crawler.run --brands ${{ matrix.issue.brand == 'FX' && 'fx' || matrix.issue.brand == 'MUJI' && 'muji' || matrix.issue.brand == 'GU' && 'gu' || 'uq' }} --sample --prev /nonexistent --out /tmp/out --report /tmp/report.json --muji-pdp-limit 3
+               如果錯誤是「手動觸發的測試失敗（--force-fail）」，代表這是測試，不用修，直接到第 4 步說明。
+            2. 找出原因（例如官網 API 欄位或網址改了），只修改 crawler/ 和 tests/ 裡的程式。
+               規則：只用 robots.txt 允許的端點、請求間隔至少 1 秒、輸出格式不變、不要動 data 或 web/。
+               不要放寬健康檢查來讓錯誤消失；資料真的有問題就不要修改程式。
+            3. 修完重跑第 1 步確認成功，再跑 python -m unittest，全部要通過。
+            4. 最後把結果寫到 autofix_summary.md：原因、改了什麼、測試結果；如果修不了或需要人決定，說明原因與建議。
+      - name: 推到 autofix 分支並在 Issue 留言
+        if: env.HAS_CLAUDE == 'true' && always()
+        run: |
+          summary="$(cat autofix_summary.md 2>/dev/null || echo '（Claude 沒有留下說明，請看執行紀錄）')"
+          rm -f autofix_summary.md
+          run_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          if [ -n "$(git status --porcelain -- crawler tests)" ]; then
+            branch="autofix/$(echo "$BRAND" | tr A-Z a-z)-${{ github.run_id }}"
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git checkout -b "$branch"
+            git add crawler tests
+            git commit -q -m "自動修復 $BRAND 爬蟲（#$ISSUE）"
+            git push -q origin "$branch"
+            link="${{ github.server_url }}/${{ github.repository }}/compare/main...${branch}?expand=1"
+            body="$(printf '🤖 自動修復嘗試\n\n%s\n\n修改已推到分支 `%s`。請看過後 **[建立 PR](%s)** 並合併；隔天更新成功會自動關閉這個 Issue。\n\n執行紀錄：%s' "$summary" "$branch" "$link" "$run_url")"
+          else
+            body="$(printf '🤖 自動修復嘗試：沒有修改程式。\n\n%s\n\n執行紀錄：%s' "$summary" "$run_url")"
+          fi
+          gh issue comment "$ISSUE" --body "$body"
