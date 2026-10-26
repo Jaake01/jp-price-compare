@@ -185,8 +185,8 @@ function renderConv() {
   const c = calc(jpy, state.taxRate, fx.rate, 0);
   out.innerHTML = `
     <div class="conv-out">
-      <div class="calc-row"><span>刷卡當下</span><span style="font-weight:500">${fmtTwd(c.pay)}</span></div>
-      <div class="calc-row"><span>退稅後</span><span style="font-weight:700">${fmtTwd(c.refund)}</span></div>
+      <div class="calc-row main"><span>換算台幣</span><span class="num">${fmtTwd(c.pay)}</span></div>
+      <div class="calc-row"><span>退稅後</span><span class="num">${fmtTwd(c.refund)}</span></div>
       <p class="threshold${c.meetsThreshold ? '' : ' warn'}">${thresholdText(c)}</p>
       <p class="rate-note">${esc(rateText())}</p>
     </div>`;
@@ -332,8 +332,8 @@ function renderCalc() {
   const threshold = thresholdText(c);
   out.innerHTML = `
     <div class="card">
-      <div class="calc-row"><span>刷卡當下</span><span style="font-weight:500">${fmtTwd(c.pay)}</span></div>
-      <div class="calc-row"><span>退稅後實際成本</span><span style="font-weight:700">${fmtTwd(c.refund)}</span></div>
+      <div class="calc-row main"><span>換算台幣</span><span class="num">${fmtTwd(c.pay)}</span></div>
+      <div class="calc-row"><span>退稅後</span><span class="num">${fmtTwd(c.refund)}</span></div>
       <div class="diff-box ${c.cheaper ? 'cheaper' : 'pricier'}">
         <span class="t">退稅後與台灣售價（${fmtTwd(tw)}）相比</span>
         <span class="v">${diffText}</span>
