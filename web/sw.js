@@ -1,10 +1,10 @@
 // 離線快取：網頁本身先用快取、背景更新；商品圖只快取看過的。
 // 商品資料與匯率由 app.js 自己存在 Cache Storage（data-v1）。
-const SHELL = 'shell-v5';
+const SHELL = 'shell-v6';
 const IMAGES = 'img-v1';
 const FONTS = 'font-v1';
 const MAX_IMAGES = 400;
-const SHELL_FILES = ['./', 'index.html', 'styles.css', 'app.js', 'search.js', 'calc.js', 'manifest.webmanifest',
+const SHELL_FILES = ['./', 'index.html', 'styles.css', 'app.js', 'search.js', 'calc.js', 'scanner.js', 'manifest.webmanifest',
   'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png'];
 
 self.addEventListener('install', (e) => {
