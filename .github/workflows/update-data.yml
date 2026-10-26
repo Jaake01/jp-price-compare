@@ -14,6 +14,7 @@ on:
         description: "這次最多抓幾個 MUJI 商品頁補 JAN"
         default: "500"
   pull_request:
+    paths-ignore: ["docs/**", "*.md"]
 
 concurrency:
   group: update-data-${{ github.event_name == 'pull_request' && github.ref || 'main' }}
@@ -27,8 +28,13 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: 單元測試
+      - name: 單元測試（爬蟲）
         run: python -m unittest -v
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: 單元測試（前端計算與搜尋）
+        run: node --test web/tests/*.test.mjs
 
   # PR：只抓少量資料，確認從 GitHub 的伺服器連得上三個官網與匯率來源；不發布、不開 Issue
   connectivity:
