@@ -1,0 +1,107 @@
+name: 每日資料更新
+
+on:
+  schedule:
+    - cron: "0 22 * * *" # 台灣時間每天 06:00
+  workflow_dispatch:
+    inputs:
+      force_fail:
+        description: "測試用：讓一個品牌故意失敗"
+        type: choice
+        options: [none, uq, gu, muji, fx]
+        default: none
+      muji_pdp_limit:
+        description: "這次最多抓幾個 MUJI 商品頁補 JAN"
+        default: "500"
+  pull_request:
+
+concurrency:
+  group: update-data-${{ github.event_name == 'pull_request' && github.ref || 'main' }}
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: 單元測試
+        run: python -m unittest -v
+
+  # PR：只抓少量資料，確認從 GitHub 的伺服器連得上三個官網與匯率來源；不發布、不開 Issue
+  connectivity:
+    if: github.event_name == 'pull_request'
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: 小量抓取
+        run: python -m crawler.run --prev /nonexistent --out out --report report.json --sample --muji-pdp-limit 3
+      - name: 檢查結果
+        run: |
+          cat report.json
+          python - <<'EOF'
+          import json, sys
+          r = json.load(open("report.json"))
+          bad = [x for x in r["results"] if not x["ok"]]
+          for x in bad:
+              print(f"::error::{x['brand']} 失敗：{x['errors']}")
+          sys.exit(1 if bad else 0)
+          EOF
+
+  update:
+    if: github.event_name != 'pull_request'
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 取得上一份資料（data 分支）
+        run: |
+          mkdir -p prev
+          if git ls-remote --exit-code origin refs/heads/data >/dev/null; then
+            git fetch --depth=1 origin data
+            git archive FETCH_HEAD | tar -x -C prev
+          fi
+          ls -la prev
+
+      - name: 抓取並做健康檢查
+        env:
+          FORCE_FAIL: ${{ inputs.force_fail }}
+          MUJI_PDP_LIMIT: ${{ inputs.muji_pdp_limit || '500' }}
+        run: |
+          args=""
+          if [ -n "$FORCE_FAIL" ] && [ "$FORCE_FAIL" != "none" ]; then args="--force-fail $FORCE_FAIL"; fi
+          python -m crawler.run --prev prev --out out --report report.json --muji-pdp-limit "$MUJI_PDP_LIMIT" $args
+          cat report.json
+
+      - name: 發布到 data 分支（覆蓋，不保留歷史）
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cd out
+          git init -q -b data
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "資料更新 $(date -u +%Y-%m-%dT%H:%MZ)"
+          git push -f "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" data
+
+      - name: 開／更新／關閉 Issue
+        if: always() && hashFiles('report.json') != ''
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: python -m crawler.issues report.json
