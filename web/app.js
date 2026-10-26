@@ -17,6 +17,7 @@ const state = {
   shown: PAGE,
   detail: null,        // { entry, matchedId, variant }
   jpyStr: '',
+  convStr: '',         // 首頁換算
   taxRate: 10,
 };
 
@@ -122,19 +123,72 @@ function renderHome() {
     return `<div class="status-row"><span>${LABEL[b]}</span><span class="val${stale ? ' stale' : ''}">${val}</span></div>`;
   }).join('');
   const noData = state.loaded && !BRANDS.some((b) => state.data[b]);
+  const status = `
+    ${noData ? '<div class="notice">手機裡還沒有商品資料。請先連上網路開啟一次，之後在店內沒有訊號也能查。</div>' : ''}
+    <div class="card status-card">
+      <h2>台灣官網資料狀態</h2>
+      ${rows}
+      <div class="status-row rate"><span>日圓匯率</span><span class="val">${esc(rateText().replace(/^匯率 /, ''))}</span></div>
+    </div>`;
+  // 已在首頁時只更新資料狀態，避免打字到一半換算框被重畫
+  const existing = $('#homeStatus');
+  if (existing) {
+    existing.innerHTML = status;
+    renderConv();
+    return;
+  }
   content.innerHTML = `
-    <div class="stack">
-      ${noData ? '<div class="notice">手機裡還沒有商品資料。請先連上網路開啟一次，之後在店內沒有訊號也能查。</div>' : ''}
+    <div class="stack" id="home">
+      <div class="card">
+        <h2><label for="convJpy">日幣換算</label></h2>
+        <div class="jpy-box"><span class="yen">¥</span>
+          <input id="convJpy" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" placeholder="輸入含稅日幣，例如 3990" value="${esc(state.convStr)}">
+        </div>
+        <div class="tax-row"><span class="label">稅率</span>${taxChipsHtml()}</div>
+        <div id="convOut"></div>
+      </div>
       <div class="card">
         <h2>怎麼查</h2>
         <p>輸入吊牌上的商品編號，會自動判斷品牌並直接打開那件商品。</p>
         <p>也可以輸入關鍵字，例如「外套」，再點上方品牌縮小範圍。</p>
       </div>
-      <div class="card status-card">
-        <h2>台灣官網資料狀態</h2>
-        ${rows}
-        <div class="status-row rate"><span>日圓匯率</span><span class="val">${esc(rateText().replace(/^匯率 /, ''))}</span></div>
-      </div>
+      <div id="homeStatus" class="stack-inner">${status}</div>
+    </div>`;
+  renderConv();
+}
+
+function taxChipsHtml() {
+  return `<button type="button" class="tax-chip" data-tax="10" aria-pressed="${state.taxRate === 10}">10% 一般</button>
+    <button type="button" class="tax-chip" data-tax="8" aria-pressed="${state.taxRate === 8}">8% 食品</button>`;
+}
+
+function thresholdText(c) {
+  return c.meetsThreshold
+    ? '單件已達退稅門檻（未稅 ¥5,000）。'
+    : `單件未達退稅門檻：同店同日合計需滿 ¥${c.thresholdInclTax.toLocaleString('en-US')}（含稅），退稅後價格才成立。`;
+}
+
+// 首頁換算：只更新結果，不重畫輸入框
+function renderConv() {
+  const out = $('#convOut');
+  if (!out) return;
+  const fx = state.data.FX;
+  const jpy = parseJpy(state.convStr);
+  if (!jpy) {
+    out.innerHTML = '';
+    return;
+  }
+  if (!fx) {
+    out.innerHTML = '<div class="notice">手機裡還沒有匯率資料，請連上網路後重新開啟。</div>';
+    return;
+  }
+  const c = calc(jpy, state.taxRate, fx.rate, 0);
+  out.innerHTML = `
+    <div class="conv-out">
+      <div class="calc-row"><span>刷卡當下</span><span style="font-weight:500">${fmtTwd(c.pay)}</span></div>
+      <div class="calc-row"><span>退稅後</span><span style="font-weight:700">${fmtTwd(c.refund)}</span></div>
+      <p class="threshold${c.meetsThreshold ? '' : ' warn'}">${thresholdText(c)}</p>
+      <p class="rate-note">${esc(rateText())}</p>
     </div>`;
 }
 
@@ -251,10 +305,7 @@ function renderDetail() {
         <div class="jpy-box"><span class="yen">¥</span>
           <input id="jpy" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" placeholder="例如 3990" value="${esc(state.jpyStr)}">
         </div>
-        <div class="tax-row"><span class="label">稅率</span>
-          <button type="button" class="tax-chip" data-tax="10" aria-pressed="${state.taxRate === 10}">10% 一般</button>
-          <button type="button" class="tax-chip" data-tax="8" aria-pressed="${state.taxRate === 8}">8% 食品</button>
-        </div>
+        <div class="tax-row"><span class="label">稅率</span>${taxChipsHtml()}</div>
       </div>
       <div id="calcOut"></div>
     </div>`;
@@ -278,9 +329,7 @@ function renderCalc() {
   const tw = nowPrice(selected());
   const c = calc(jpy, state.taxRate, fx.rate, tw);
   const diffText = c.cheaper ? `便宜 ${fmtTwd(c.diff)}（−${c.pct}%）` : `貴 ${fmtTwd(-c.diff)}（+${c.pct}%）`;
-  const threshold = c.meetsThreshold
-    ? '單件已達退稅門檻（未稅 ¥5,000）。'
-    : `單件未達退稅門檻：同店同日合計需滿 ¥${c.thresholdInclTax.toLocaleString('en-US')}（含稅），退稅後價格才成立。`;
+  const threshold = thresholdText(c);
   out.innerHTML = `
     <div class="card">
       <div class="calc-row"><span>刷卡當下</span><span style="font-weight:500">${fmtTwd(c.pay)}</span></div>
@@ -349,8 +398,9 @@ content.addEventListener('click', (e) => {
   const t = e.target.closest('.tax-chip');
   if (t) {
     state.taxRate = Number(t.dataset.tax);
-    for (const b of document.querySelectorAll('.tax-chip')) b.setAttribute('aria-pressed', String(b === t));
+    for (const b of document.querySelectorAll('.tax-chip')) b.setAttribute('aria-pressed', String(b.dataset.tax === t.dataset.tax));
     renderCalc();
+    renderConv();
   }
 });
 
@@ -358,6 +408,9 @@ content.addEventListener('input', (e) => {
   if (e.target.id === 'jpy') {
     state.jpyStr = e.target.value;
     renderCalc();
+  } else if (e.target.id === 'convJpy') {
+    state.convStr = e.target.value;
+    renderConv();
   }
 });
 
