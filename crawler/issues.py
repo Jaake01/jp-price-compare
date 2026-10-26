@@ -50,6 +50,7 @@ def main():
         report = json.load(f)
     open_issues = _api("GET", f"/repos/{repo}/issues?state=open&per_page=100") or []
     by_title = {i["title"]: i for i in open_issues if "pull_request" not in i}
+    new_issues = []  # 這次新開的 Issue，交給自動修復
     for r in report["results"]:
         title = title_for(r["brand"])
         issue = by_title.get(title)
@@ -61,6 +62,7 @@ def main():
             else:
                 new = _api("POST", f"/repos/{repo}/issues", {"title": title, "body": body, "labels": [LABEL]})
                 print(f"{r['brand']}: 開新 Issue #{new['number']}")
+                new_issues.append({"brand": r["brand"], "number": new["number"], "errors": r["errors"]})
         elif issue:
             msg = f"今天更新成功（{r.get('count', '')} 筆），自動關閉。"
             if run_url:
@@ -68,6 +70,15 @@ def main():
             _api("POST", f"/repos/{repo}/issues/{issue['number']}/comments", {"body": msg})
             _api("PATCH", f"/repos/{repo}/issues/{issue['number']}", {"state": "closed", "state_reason": "completed"})
             print(f"{r['brand']}: 關閉 #{issue['number']}")
+    write_output("new_issues", new_issues)
+
+
+def write_output(name, value):
+    """寫到 GitHub Actions 的 step output（本機執行時略過）。"""
+    path = os.environ.get("GITHUB_OUTPUT")
+    if path:
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(f"{name}={json.dumps(value, ensure_ascii=False)}\n")
 
 
 if __name__ == "__main__":

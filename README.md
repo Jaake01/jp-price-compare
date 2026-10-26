@@ -32,6 +32,12 @@ GitHub Actions（`.github/workflows/update-data.yml`）每天台灣時間 06:00 
 
 **手動執行**：Actions → 每日資料更新 → Run workflow。可選「讓一個品牌故意失敗」來測試失敗處理。
 
+**自動修復（選用）**：新開失敗 Issue 時，會讓 Claude 試著修爬蟲，並在 Issue 留言附上建立 PR 的連結。要啟用的話：
+
+1. 在自己電腦安裝 Claude Code 後執行 `claude setup-token`，取得長效權杖（使用你的 Claude 訂閱額度）。
+2. 儲存庫 Settings → Secrets and variables → Actions → New repository secret，名稱 `CLAUDE_CODE_OAUTH_TOKEN`，貼上權杖。也可以改用 Anthropic API 金鑰，名稱 `ANTHROPIC_API_KEY`（依用量付費）。
+3. 測試：手動執行時選一個品牌故意失敗，並勾選「故意失敗時也測試自動修復」。這種測試 Claude 不會改程式，只會在 Issue 留言說明。
+
 **本機執行**（只需要 Python 3.10 以上，不用安裝套件）：
 
 ```sh
