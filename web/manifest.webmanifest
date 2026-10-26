@@ -1,6 +1,6 @@
 {
-  "name": "日系比價",
-  "short_name": "日系比價",
+  "name": "日牌比價",
+  "short_name": "日牌比價",
   "description": "UNIQLO・GU・MUJI 日本吊牌價與台灣官網售價比價",
   "lang": "zh-Hant",
   "start_url": "./",
