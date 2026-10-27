@@ -13,9 +13,9 @@ import sys
 import traceback
 from datetime import datetime, timezone
 
-from . import fastretailing, fx, health, muji
+from . import adastria, fastretailing, fx, health, montbell, muji, nitori
 
-BRANDS = ["uq", "gu", "muji", "fx"]
+BRANDS = ["uq", "gu", "muji", "nitori", "gw", "niko", "montbell", "fx"]
 MUJI_CACHE = "muji_cache.json"
 
 
@@ -61,6 +61,27 @@ def run_brand(key, args, prev_dir):
         notes.append(f"商品頁補 JAN：本次 {done} 頁，尚餘 {remaining} 頁")
         records = muji.transform(pages, groups, cache)
         brand = "MUJI"
+    elif key == "nitori":
+        items = nitori.fetch(max_categories=2 if sample else None)
+        records = nitori.transform(items)
+        brand = "NITORI"
+    elif key in ("gw", "niko"):
+        brand = key.upper()
+        pages = adastria.fetch_listing(brand, max_pages=1 if sample else None)
+        cache_file = f"{key}_cache.json"
+        cache = _load(os.path.join(prev_dir, cache_file)) or {}
+        cache, done, remaining = adastria.update_cache(cache, pages, args.pdp_limit)
+        _write(os.path.join(args.out, cache_file), cache)
+        notes.append(f"商品頁補條碼：本次 {done} 頁，尚餘 {remaining} 頁")
+        records = adastria.transform(brand, pages, cache)
+    elif key == "montbell":
+        brand = "MB"
+        handles = montbell.fetch_handles()
+        cache = _load(os.path.join(prev_dir, "montbell_cache.json")) or {}
+        cache, done, missing = montbell.update_cache(cache, handles, args.montbell_limit)
+        _write(os.path.join(args.out, "montbell_cache.json"), cache)
+        notes.append(f"單品資料：本次更新 {done} 款，還沒抓過 {missing} 款")
+        records = montbell.transform(cache)
     else:
         data = fx.fetch()
         ok, errors = health.check_fx(data, _load(os.path.join(prev_dir, "fx.json")))
@@ -81,6 +102,8 @@ def main(argv=None):
     ap.add_argument("--brands", default=",".join(BRANDS))
     ap.add_argument("--force-fail", default="", help="測試用：讓指定品牌失敗")
     ap.add_argument("--muji-pdp-limit", type=int, default=500, help="每次最多抓幾個 MUJI 商品頁補 JAN")
+    ap.add_argument("--pdp-limit", type=int, default=300, help="GLOBAL WORK、niko and 每次最多抓幾個商品頁補條碼")
+    ap.add_argument("--montbell-limit", type=int, default=250, help="mont-bell 每次最多更新幾款單品資料")
     ap.add_argument("--sample", action="store_true", help="只抓少量資料，確認連得上（不做商品數檢查）")
     args = ap.parse_args(argv)
     os.makedirs(args.out, exist_ok=True)

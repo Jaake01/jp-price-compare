@@ -11,7 +11,8 @@ import urllib.request
 
 API = "https://api.github.com"
 LABEL = "data-update-failure"
-NAMES = {"UQ": "UNIQLO", "GU": "GU", "MUJI": "MUJI", "FX": "匯率"}
+NAMES = {"UQ": "UNIQLO", "GU": "GU", "MUJI": "MUJI", "NITORI": "宜得利", "GW": "GLOBAL WORK",
+         "NIKO": "niko and ...", "MONTBELL": "mont-bell", "FX": "匯率"}
 
 
 def title_for(brand):
@@ -62,7 +63,7 @@ def main():
             else:
                 new = _api("POST", f"/repos/{repo}/issues", {"title": title, "body": body, "labels": [LABEL]})
                 print(f"{r['brand']}: 開新 Issue #{new['number']}")
-                new_issues.append({"brand": r["brand"], "number": new["number"], "errors": r["errors"]})
+                new_issues.append({"brand": r["brand"], "key": r["brand"].lower(), "number": new["number"], "errors": r["errors"]})
         elif issue:
             msg = f"今天更新成功（{r.get('count', '')} 筆），自動關閉。"
             if run_url:
