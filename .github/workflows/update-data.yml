@@ -2,7 +2,7 @@ name: 每日資料更新
 
 on:
   schedule:
-    - cron: "0 22 * * *" # 台灣時間每天 06:00
+    - cron: "37 21 * * *" # 台灣時間每天 05:37（避開整點的排程壅塞）
   workflow_dispatch:
     inputs:
       force_fail:

@@ -20,7 +20,7 @@ node --test web/tests/*.test.mjs        # 計算與搜尋的測試（在專案�
 
 ## 每日資料更新
 
-GitHub Actions（`.github/workflows/update-data.yml`）每天台灣時間 06:00 執行，結果發布到 `data` 分支：
+GitHub Actions（`.github/workflows/update-data.yml`）每天台灣時間 05:37 執行，結果發布到 `data` 分支：
 
 | 檔案 | 內容 |
 | --- | --- |
