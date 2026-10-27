@@ -8,7 +8,7 @@ on:
       force_fail:
         description: "測試用：讓一個品牌故意失敗"
         type: choice
-        options: [none, uq, gu, muji, fx]
+        options: [none, uq, gu, muji, nitori, gw, niko, montbell, fx]
         default: none
       muji_pdp_limit:
         description: "這次最多抓幾個 MUJI 商品頁補 JAN"
@@ -51,7 +51,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: 小量抓取
-        run: python -m crawler.run --prev /nonexistent --out out --report report.json --sample --muji-pdp-limit 3
+        run: python -m crawler.run --prev /nonexistent --out out --report report.json --sample --muji-pdp-limit 3 --pdp-limit 3 --montbell-limit 3
       - name: 檢查結果
         run: |
           cat report.json
@@ -68,7 +68,7 @@ jobs:
     if: github.event_name != 'pull_request'
     needs: test
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 100
     permissions:
       contents: write
       issues: write
@@ -166,8 +166,8 @@ jobs:
             每日資料更新時，品牌「${{ matrix.issue.brand }}」失敗了，錯誤如下：
             ${{ toJSON(matrix.issue.errors) }}
 
-            背景：先讀 SPEC.md「爬蟲與自動維護」「資料規格」和 docs/recon.md，爬蟲在 crawler/。
-            1. 用小量抓取重現：python -m crawler.run --brands ${{ matrix.issue.brand == 'FX' && 'fx' || matrix.issue.brand == 'MUJI' && 'muji' || matrix.issue.brand == 'GU' && 'gu' || 'uq' }} --sample --prev /nonexistent --out /tmp/out --report /tmp/report.json --muji-pdp-limit 3
+            背景：先讀 SPEC.md「爬蟲與自動維護」「資料規格」和 docs/recon.md、docs/recon-2.md，爬蟲在 crawler/。
+            1. 用小量抓取重現：python -m crawler.run --brands ${{ matrix.issue.key }} --sample --prev /nonexistent --out /tmp/out --report /tmp/report.json --muji-pdp-limit 3 --pdp-limit 3 --montbell-limit 3
                如果錯誤是「手動觸發的測試失敗（--force-fail）」，代表這是測試，不用修，直接到第 4 步說明。
             2. 找出原因（例如官網 API 欄位或網址改了），只修改 crawler/ 和 tests/ 裡的程式。
                規則：只用 robots.txt 允許的端點、請求間隔至少 1 秒、輸出格式不變、不要動 data 或 web/。

@@ -24,9 +24,11 @@ GitHub Actions（`.github/workflows/update-data.yml`）每天台灣時間 06:00 
 
 | 檔案 | 內容 |
 | --- | --- |
-| `uq.json`、`gu.json`、`muji.json` | 各品牌商品（格式見 SPEC.md「資料規格」） |
+| `uq.json`、`gu.json`、`muji.json`、`nitori.json`、`gw.json`、`niko.json`、`montbell.json` | 各品牌商品（格式見 SPEC.md「資料規格」） |
 | `fx.json` | 日圓匯率 |
 | `muji_cache.json` | MUJI 各商品頁的全部尺寸 JAN 快取 |
+| `gw_cache.json`、`niko_cache.json` | GLOBAL WORK、niko and ... 各商品頁的各色各尺寸條碼快取 |
+| `montbell_cache.json` | mont-bell 單品資料快取（每天輪流更新約 250 款） |
 
 某個品牌健康檢查沒過時，沿用上一份資料，並自動開一個「[資料更新失敗] 品牌名」的 Issue；之後成功會自動關閉。
 

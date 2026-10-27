@@ -15,7 +15,7 @@
 ## 系統架構
 
 ```
-每日 06:00 GitHub Actions 自動抓取（UNIQLO・GU・MUJI・匯率）
+每日 06:00 GitHub Actions 自動抓取（UNIQLO・GU・MUJI・宜得利・GLOBAL WORK・niko and ...・mont-bell・匯率）
         │
    通過健康檢查？
    ├─ 通過 ──→ 覆蓋成新資料 ──┐
@@ -30,11 +30,11 @@
 
 ## 資料規格
 
-每個品牌一個 JSON 檔（`data/uq.json`、`data/gu.json`、`data/muji.json`），匯率另存 `data/fx.json`。同一款不同顏色、尺寸合併成一筆；顏色之間價格不同時，各色價格存在 `variants`。UQ、GU 以 6 位數編號合併（官網會把特價顏色拆成另一筆商品）；MUJI 以官網的顏色分組（salePageGroup）合併。資料來源細節見 `docs/recon.md`。
+每個品牌一個 JSON 檔（`data/uq.json`、`gu.json`、`muji.json`、`nitori.json`、`gw.json`、`niko.json`、`montbell.json`），匯率另存 `data/fx.json`。同一款不同顏色、尺寸合併成一筆；顏色之間價格不同時，各色價格存在 `variants`。UQ、GU 以 6 位數編號合併（官網會把特價顏色拆成另一筆商品）；MUJI 以官網的顏色分組（salePageGroup）合併。資料來源細節見 `docs/recon.md`。
 
 | 欄位 | 型別 | 說明 |
 | --- | --- | --- |
-| brand | 字串 | `UQ` / `GU` / `MUJI` |
+| brand | 字串 | `UQ` / `GU` / `MUJI` / `NITORI` / `GW`（GLOBAL WORK）/ `NIKO`（niko and ...）/ `MB`（mont-bell） |
 | id | 字串 | 商品編號。UQ、GU 為 6 位數；MUJI 優先存 JAN 碼（日本商品條碼，13 位），無則存官網商品 ID |
 | altIds | 字串陣列 | 其他可搜尋的編號，可空。UQ、GU：各顏色自己的 6 位數編號與品名後附的編號；MUJI：同款所有顏色、尺寸的 JAN 碼 |
 | name | 字串 | 台灣官網品名 |
@@ -46,6 +46,7 @@
 | url | 字串 | 官網商品頁連結 |
 | category | 字串 | 官網分類名稱，用於關鍵字搜尋 |
 | audience | 字串陣列 | 對象：`女`、`男`、`童`、`嬰` 的組合，可空（家居、文具等）。UQ、GU 取官網大分類（男女適穿兩邊都有）；MUJI 取品名開頭（女／男／兒童／幼兒）。用於篩選 |
+| checkedAt | 字串（選用） | 這筆價格的確認日期（YYYY-MM-DD）。只有每款輪流更新的品牌（mont-bell）才有 |
 
 每個品牌檔案外層另有 `brand`、`updatedAt`（ISO 時間）、`count`，商品放在 `items` 陣列。`fx.json` 存日圓匯率（`rate`：1 日圓 = ? 新台幣）、來源與日期。匯率來源為國際參考匯率（ExchangeRate-API 免費每日資料）：台灣銀行牌告網站有反機器人驗證，雲端抓不到（2026-10-26 決定改用）。前端需標示「國際參考匯率」，提醒與實際刷卡匯率會有差距。
 
@@ -58,6 +59,7 @@
 **資料來源**
 
 - UNIQLO 台灣官網、GU 台灣官網：已確認同一套平台，共用一個爬蟲模組，只差網域設定。
+- 宜得利、GLOBAL WORK、niko and ...、mont-bell（2026-10-27 新增）：資料來源與編號見 `docs/recon-2.md`。GLOBAL WORK、niko and ... 在 and ST TW（91APP），和 MUJI 共用 `crawler/nineyi.py`。mont-bell 列表頁價格不可靠，只用單品資料、每天輪流更新約 250 款，每款記錄確認日期 `checkedAt`，前端顯示該日期（超過 8 天標示可能過期）。
 - MUJI 台灣網路商店 shop.muji.tw：已確認建在 91APP 上。每天用列表 API 更新價格；只有新出現的商品頁才抓一次商品頁 HTML 補齊各尺寸 JAN，結果存成快取檔（JAN 不會變），第一次補齊分多天執行。不使用 robots.txt 禁止的端點。
 - 優先使用網站自己載入的 JSON 資料（瀏覽器背後呼叫的 API），其次才解析 HTML。不需登入。
 - 請求間隔至少 1 秒，帶上正常的 User-Agent，每天只跑一次。
@@ -68,7 +70,7 @@
 
 1. 商品數比上次少超過 20%。
 2. 超過 5% 的商品缺品名、價格或連結。
-3. 價格不合理（小於 NT$10 或大於 NT$50,000，或特價高於原價）的商品超過 5%。未超過時只剔除這些商品並記錄在執行紀錄中，不影響其他商品更新。
+3. 價格不合理（小於 NT$10 或大於 NT$200,000，或特價高於原價；宜得利家具可到 6 萬以上）的商品超過 5%。未超過時只剔除這些商品並記錄在執行紀錄中，不影響其他商品更新。
 4. 匯率超出 0.15–0.30 的合理範圍，或單日變動超過 5%。
 
 **失敗處理**
