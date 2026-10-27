@@ -1,4 +1,4 @@
-import { buildIndex, search, defaultVariant, hasPriceSpread, nowPrice, normalize } from './search.js';
+import { buildIndex, search, defaultVariant, hasPriceSpread, nowPrice, normalize, applyFilters, filtersActive, DEFAULT_FILTERS } from './search.js';
 import { calc, fmtTwd, parseJpy } from './calc.js';
 import { scanSupported, startScan } from './scanner.js';
 
@@ -21,6 +21,8 @@ const state = {
   convStr: '',         // 首頁換算
   scanned: '',         // 最近一次掃到的條碼
   taxRate: 10,
+  filters: { ...DEFAULT_FILTERS }, // 關鍵字搜尋的篩選與排序
+  hasAudience: false,  // 資料裡有沒有「對象」欄位（舊資料沒有）
 };
 
 const $ = (s, el = document) => el.querySelector(s);
@@ -64,6 +66,7 @@ async function refresh() {
 
 function rebuild() {
   state.index = buildIndex({ UQ: state.data.UQ, GU: state.data.GU, MUJI: state.data.MUJI });
+  state.hasAudience = state.index.entries.some((e) => Array.isArray(e.rec.audience));
 }
 
 // ---------- 格式 ----------
@@ -219,15 +222,44 @@ function scanNote(q) {
 
 let lastResults = [];
 
+const AUDIENCES = [['ALL', '全部'], ['女', '女'], ['男', '男'], ['童', '童'], ['嬰', '嬰幼兒']];
+const SORTS = [['rel', '相關度'], ['price_asc', '價格低→高'], ['price_desc', '價格高→低'], ['discount', '折扣多→少']];
+
+function filterBarHtml() {
+  const f = state.filters;
+  const aud = state.hasAudience ? `<div class="filter-chips" role="group" aria-label="對象">${AUDIENCES.map(([v, l]) =>
+    `<button type="button" class="fchip" data-aud="${v}" aria-pressed="${f.audience === v}">${l}</button>`).join('')}</div>` : '';
+  return `<div class="filter-bar">
+    ${aud}
+    <div class="filter-row">
+      <label class="sort"><span class="sr-only">排序</span>
+        <select id="sort">${SORTS.map(([v, l]) => `<option value="${v}"${f.sort === v ? ' selected' : ''}>${l}</option>`).join('')}</select>
+      </label>
+      <button type="button" class="fchip sale-toggle" aria-pressed="${f.saleOnly}">只看特價</button>
+      ${filtersActive(f) ? '<button type="button" class="clear-filters">清除篩選</button>' : ''}
+    </div>
+  </div>`;
+}
+
 function renderResults(r) {
   stopMoreObserver();
-  lastResults = r.items;
   const q = state.query.trim();
+  const isText = r.mode === 'text';
+  // 編號查詢不套用篩選，避免查不到手上那件
+  const items = isText ? applyFilters(r.items, state.filters) : r.items;
+  lastResults = items;
   let header;
   if (r.mode === 'exact' && r.ambiguous) header = `<p class="result-header warn">這個編號在兩個品牌都有，請點選你看到的那件</p>`;
-  else if (r.mode !== 'text') header = `<p class="result-header">編號查詢・自動比對三個品牌・${r.items.length} 件</p>`;
-  else header = `<p class="result-header">「${esc(q)}」・${state.brand === 'ALL' ? '全部品牌' : LABEL[state.brand]}・${r.items.length} 件</p>`;
-  const cards = r.items.slice(0, state.shown).map(({ entry, matchedId }, i) => {
+  else if (!isText) header = `<p class="result-header">編號查詢・自動比對三個品牌・${r.items.length} 件</p>`;
+  else header = `<p class="result-header">「${esc(q)}」・${state.brand === 'ALL' ? '全部品牌' : LABEL[state.brand]}・${items.length} 件${filtersActive(state.filters) ? `（共 ${r.items.length} 件，已篩選）` : ''}</p>`;
+  if (isText) header = filterBarHtml() + header;
+  if (!items.length) {
+    content.innerHTML = `<div class="results">${header}
+      <div class="empty filtered"><h2>篩選後沒有符合的商品</h2>
+        <button type="button" class="clear-filters big">清除篩選</button></div></div>`;
+    return;
+  }
+  const cards = items.slice(0, state.shown).map(({ entry, matchedId }, i) => {
     const rec = entry.rec;
     const id = matchedId || rec.id;
     return `<button type="button" class="item" data-idx="${i}">
@@ -239,7 +271,7 @@ function renderResults(r) {
       </div>
     </button>`;
   }).join('');
-  const more = r.items.length > state.shown ? '<div class="more" id="more" aria-hidden="true"></div>' : '';
+  const more = items.length > state.shown ? '<div class="more" id="more" aria-hidden="true"></div>' : '';
   content.innerHTML = `<div class="results">${header}<div class="grid">${cards}</div>${more}</div>`;
   const sentinel = $('#more');
   if (sentinel && 'IntersectionObserver' in window) {
@@ -427,6 +459,10 @@ content.addEventListener('click', (e) => {
     window.scrollTo(0, y);
     return;
   }
+  const aud = e.target.closest('.fchip[data-aud]');
+  if (aud) return updateFilters({ audience: aud.dataset.aud });
+  if (e.target.closest('.sale-toggle')) return updateFilters({ saleOnly: !state.filters.saleOnly });
+  if (e.target.closest('.clear-filters')) return updateFilters({ ...DEFAULT_FILTERS });
   const t = e.target.closest('.tax-chip');
   if (t) {
     state.taxRate = Number(t.dataset.tax);
@@ -435,6 +471,16 @@ content.addEventListener('click', (e) => {
     renderConv();
   }
 });
+
+content.addEventListener('change', (e) => {
+  if (e.target.id === 'sort') updateFilters({ sort: e.target.value });
+});
+
+function updateFilters(patch) {
+  state.filters = { ...state.filters, ...patch };
+  state.shown = PAGE;
+  render();
+}
 
 content.addEventListener('input', (e) => {
   if (e.target.id === 'jpy') {

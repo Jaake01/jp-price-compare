@@ -21,6 +21,24 @@ _STYLE_RE = re.compile(r"^\s*(\d{6})\s*/\s*(.+?)\s*$")
 _TRAILING_CODES_RE = re.compile(r"\s*\d{6}(\s*/\s*\d{6})*\s*$")
 _CODE_RE = re.compile(r"(?<!\d)\d{6}(?!\d)")
 
+# 官網大分類 → 對象（女／男／童／嬰）。男女適穿的商品兩邊都有。
+AUDIENCE = {
+    "女裝": "女", "WOMEN": "女",
+    "男裝": "男", "MEN": "男",
+    "童裝": "童", "童裝(男童/女童)": "童", "KIDS": "童", "女童": "童", "男童": "童",
+    "嬰幼兒": "嬰", "新生兒/嬰幼兒": "嬰", "BABY": "嬰",
+}
+AUDIENCE_ORDER = "女男童嬰"
+
+
+def _audience(products):
+    tags = set()
+    for p in products:
+        for name in [c.get("name") for c in p.get("topCategories") or []] + [p.get("gender")]:
+            if name in AUDIENCE:
+                tags.add(AUDIENCE[name])
+    return sorted(tags, key=AUDIENCE_ORDER.index)
+
 
 def _body(page, page_size):
     return {
@@ -103,6 +121,7 @@ def transform(brand, products):
             "image": base + primary["mainPic"] if primary.get("mainPic") else "",
             "url": f"{base}/zh_TW/product-detail.html?productCode={primary['productCode']}",
             "category": level_one[0]["name"] if level_one else "",
+            "audience": _audience(ps),
             "variants": variants,
         })
     for r in records:  # 顏色連結和商品連結相同時省略，縮小檔案

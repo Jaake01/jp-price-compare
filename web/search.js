@@ -84,3 +84,25 @@ export function hasPriceSpread(rec) {
   const set = new Set((rec.variants || []).map((v) => nowPrice(v) + '/' + v.price));
   return set.size > 1;
 }
+
+// 篩選與排序（只用在關鍵字搜尋）。opts：{ audience: 'ALL'|'女'|'男'|'童'|'嬰', saleOnly, sort: 'rel'|'price_asc'|'price_desc'|'discount' }
+export const DEFAULT_FILTERS = { audience: 'ALL', saleOnly: false, sort: 'rel' };
+
+export function filtersActive(opts) {
+  return opts.audience !== 'ALL' || opts.saleOnly || opts.sort !== 'rel';
+}
+
+const recNow = (rec) => (rec.salePrice != null ? rec.salePrice : rec.price);
+const discount = (rec) => (rec.price ? 1 - recNow(rec) / rec.price : 0);
+
+export function applyFilters(items, opts) {
+  let out = items;
+  if (opts.audience !== 'ALL') out = out.filter(({ entry }) => (entry.rec.audience || []).includes(opts.audience));
+  if (opts.saleOnly) out = out.filter(({ entry }) => entry.rec.salePrice != null);
+  const by = {
+    price_asc: (a, b) => recNow(a.entry.rec) - recNow(b.entry.rec),
+    price_desc: (a, b) => recNow(b.entry.rec) - recNow(a.entry.rec),
+    discount: (a, b) => discount(b.entry.rec) - discount(a.entry.rec),
+  }[opts.sort];
+  return by ? [...out].sort(by) : out; // sort 是穩定排序，同價時保留相關度順序
+}

@@ -156,3 +156,20 @@ button, input { font-family: inherit; }
 .scan-hint { position: relative; margin: 20px 24px 0; color: #FFFFFF; font-size: 15px; line-height: 1.6; text-align: center; }
 .scan-cancel { position: absolute; left: 16px; right: 16px; bottom: calc(24px + env(safe-area-inset-bottom)); height: 52px; border: 0; border-radius: 26px;
   background: #FFFFFF; color: var(--text); font-size: 16px; font-weight: 700; cursor: pointer; }
+
+/* 篩選與排序 */
+.filter-bar { display: flex; flex-direction: column; gap: 8px; }
+.filter-chips { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
+.filter-chips::-webkit-scrollbar { display: none; }
+.filter-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.fchip { flex: none; min-width: 52px; height: 36px; padding: 0 14px; border-radius: 18px; font-size: 13px; cursor: pointer; position: relative;
+  background: var(--card); color: var(--text); border: 1px solid var(--input-border); }
+.fchip::after { content: ''; position: absolute; inset: -4px 0; } /* 觸控區至少 44px */
+.fchip[aria-pressed="true"] { background: #15191E; color: #FFFFFF; border-color: #15191E; }
+.sort select { height: 36px; padding: 0 30px 0 12px; border-radius: 18px; border: 1px solid var(--input-border); background: var(--card); color: var(--text);
+  font-size: 13px; font-family: inherit; appearance: none; -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%235A6470' stroke-width='3' stroke-linecap='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 12px center; }
+.clear-filters { height: 36px; padding: 0 6px; border: 0; background: transparent; color: var(--accent); font-size: 13px; font-weight: 500; cursor: pointer; }
+.empty.filtered { padding: 40px 24px; }
+.clear-filters.big { height: 44px; padding: 0 20px; border: 1px solid var(--accent); border-radius: 22px; font-size: 15px; }

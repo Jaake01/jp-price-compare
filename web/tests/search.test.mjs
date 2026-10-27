@@ -74,3 +74,21 @@ test('沒有指定顏色時預設最高售價；判斷是否有價格差異', ()
   assert.equal(hasPriceSpread(r), true);
   assert.equal(hasPriceSpread(idx.byId.get('352118')[0].rec), false);
 });
+
+import { applyFilters, filtersActive, DEFAULT_FILTERS } from '../search.js';
+
+test('篩選對象、只看特價、排序', () => {
+  const mk = (id, price, salePrice, audience) => ({ entry: { rec: { id, price, salePrice, audience } }, matchedId: null });
+  const items = [mk('a', 990, null, ['女', '男']), mk('b', 590, 390, ['女']), mk('c', 1290, 990, ['男']), mk('d', 290, null, [])];
+  const ids = (xs) => xs.map((x) => x.entry.rec.id);
+  assert.deepEqual(ids(applyFilters(items, DEFAULT_FILTERS)), ['a', 'b', 'c', 'd']);
+  assert.deepEqual(ids(applyFilters(items, { ...DEFAULT_FILTERS, audience: '女' })), ['a', 'b']);
+  assert.deepEqual(ids(applyFilters(items, { ...DEFAULT_FILTERS, audience: '男' })), ['a', 'c']);
+  assert.deepEqual(ids(applyFilters(items, { ...DEFAULT_FILTERS, saleOnly: true })), ['b', 'c']);
+  assert.deepEqual(ids(applyFilters(items, { ...DEFAULT_FILTERS, sort: 'price_asc' })), ['d', 'b', 'a', 'c']); // 特價用特價比
+  assert.deepEqual(ids(applyFilters(items, { ...DEFAULT_FILTERS, sort: 'price_desc' })), ['a', 'c', 'b', 'd']); // a、c 同為 990，保留相關度順序
+  assert.deepEqual(ids(applyFilters(items, { ...DEFAULT_FILTERS, sort: 'discount' })), ['b', 'c', 'a', 'd']); // 34% > 23%
+  assert.equal(filtersActive(DEFAULT_FILTERS), false);
+  assert.equal(filtersActive({ ...DEFAULT_FILTERS, saleOnly: true }), true);
+  assert.equal(applyFilters(items, DEFAULT_FILTERS), items); // 沒篩選時不複製
+});
