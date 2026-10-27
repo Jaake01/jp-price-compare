@@ -3,7 +3,7 @@ import os
 import tempfile
 import unittest
 
-from crawler import fastretailing, health, issues, muji
+from crawler import adastria, fastretailing, health, issues, montbell, muji, nitori
 
 
 def fr_product(code, pc, name, origin, current, styles, colors=None, pic="/hmall/test/x/1.jpg"):
@@ -168,7 +168,8 @@ class IssuesTest(unittest.TestCase):
         os.environ["GITHUB_OUTPUT"] = path
         try:
             issues.write_output("new_issues", [{"brand": "GU", "number": 3, "errors": ["壞了"]}])
-            line = open(path, encoding="utf-8").read().strip()
+            with open(path, encoding="utf-8") as f:
+                line = f.read().strip()
         finally:
             del os.environ["GITHUB_OUTPUT"]
             os.remove(path)
@@ -179,6 +180,85 @@ class IssuesTest(unittest.TestCase):
     def test_write_output_noop_locally(self):
         os.environ.pop("GITHUB_OUTPUT", None)
         issues.write_output("new_issues", [])  # 不應出錯
+
+
+class NitoriTest(unittest.TestCase):
+    def test_transform_per_sku_prices(self):
+        items = {"7950285s": ({
+            "itemNo": "7950285s", "skunos": ["7950285", "7950283"], "name": "巧拼地墊 N VT01-N ",
+            "skusPrice": [{"listPrice": 199, "salePrice": 179}, {"listPrice": 299, "salePrice": 299}],
+            "skusColor": [{"colorName": ["淺棕", ""]}, {"colorName": ["中灰色", ""]}],
+            "imageUrl": "https://x/7950285_01.jpg"}, "地毯．地墊"),
+            "2116100000043s": ({"itemNo": "2116100000043s", "skunos": ["2116100000043"], "name": "幼兒枕",
+                                "skusPrice": [{"listPrice": 399, "salePrice": 399}], "skusColor": [], "imageUrl": ""}, "網購限定")}
+        recs = {r["id"]: r for r in nitori.transform(items)}
+        r = recs["7950285"]
+        self.assertEqual(r["altIds"], ["7950283"])
+        self.assertEqual((r["price"], r["salePrice"], r["maxPrice"]), (299, 179, 299))
+        self.assertEqual([v["color"] for v in r["variants"]], ["淺棕", "中灰色"])
+        self.assertEqual(r["url"], "https://www.nitori-net.tw/product/7950285s")
+        self.assertEqual(r["name"], "巧拼地墊 N VT01-N")
+        self.assertEqual(r["category"], "地毯．地墊")
+        t = recs["2116100000043"]  # 沒有 7 位數編號就用台灣店內碼
+        self.assertIsNone(t["salePrice"])
+        self.assertEqual(t["category"], "")  # 行銷分類不當 category
+
+
+class AdastriaTest(unittest.TestCase):
+    def test_split_title(self):
+        self.assertEqual(adastria.split_title("GW", "GLOBAL WORK女法蘭絨格紋襯衫上衣-二色-1074909"),
+                         ("女法蘭絨格紋襯衫上衣", "1074909", ["女"]))
+        self.assertEqual(adastria.split_title("NIKO", "niko and防寒保暖毛絨坐墊-二色-1066038"),
+                         ("防寒保暖毛絨坐墊", "1066038", []))
+        self.assertEqual(adastria.split_title("GW", "GLOBAL WORK男女適穿刷毛外套-1000001")[2], ["女", "男"])
+
+    def test_transform_uses_code_and_cached_barcodes(self):
+        pages = {12257970: {"salePageId": 12257970, "title": "GLOBAL WORK女法蘭絨格紋襯衫上衣-二色-1074909",
+                            "price": 903.0, "suggestPrice": 1290.0, "skuOuterId": "1900024793829", "picUrl": "//img/1"}}
+        cache = {"12257970": {"barcodes": ["1900024793829", "1900024793850"]}}
+        r = adastria.transform("GW", pages, cache)[0]
+        self.assertEqual(r["id"], "1074909")
+        self.assertEqual(r["altIds"], ["1900024793829", "1900024793850"])
+        self.assertEqual((r["price"], r["salePrice"]), (1290, 903))
+        self.assertEqual(r["url"], "https://www.dot-st.tw/SalePage/Index/12257970")
+        self.assertEqual(r["image"], "https://img/1")
+
+
+class MontbellTest(unittest.TestCase):
+    PRODUCT = {"id": 66411219, "handle": "wind-1103242", "title": "WIND BLAST PK男款連帽風衣#1103242",
+               "featured_image": {"large": "//cdn/x.jpg"},
+               "variants": [{"sku": "1103242BK-M", "option1": "BK黑", "price": 2480.0, "compare_at_price": None},
+                            {"sku": "1103242BK-L", "option1": "BK黑", "price": 2480.0, "compare_at_price": None},
+                            {"sku": "1103242NV-M", "option1": "NV藍", "price": 1990.0, "compare_at_price": 2480.0}]}
+
+    def test_parse_and_transform(self):
+        c = dict(montbell.parse_product(self.PRODUCT), fetched="2026-10-27")
+        self.assertEqual(c["image"], "https://cdn/x.jpg")
+        r = montbell.transform({"wind-1103242": c})[0]
+        self.assertEqual(r["id"], "1103242")
+        self.assertEqual(r["name"], "WIND BLAST PK男款連帽風衣")
+        self.assertEqual((r["price"], r["salePrice"], r["maxPrice"]), (2480, 1990, 2480))
+        self.assertEqual([(v["color"], v["salePrice"]) for v in r["variants"]], [("BK黑", None), ("NV藍", 1990)])
+        self.assertEqual(r["audience"], ["男"])
+        self.assertEqual(r["checkedAt"], "2026-10-27")
+        self.assertEqual(r["url"], "https://www.montbell.com.tw/products/wind-1103242")
+
+    def test_skips_products_without_code(self):
+        c = montbell.parse_product({"id": 1, "handle": "gift", "title": "禮物卡", "variants": [{"price": 500.0}]})
+        self.assertEqual(montbell.transform({"gift": c}), [])
+
+    def test_update_cache_prefers_missing(self):
+        calls = []
+        orig = montbell.http.get_json
+        montbell.http.get_json = lambda url, **kw: calls.append(url) or {"id": 9, "handle": url, "variants": []}
+        try:
+            cache = {"old": {"id": 1, "handle": "old", "fetched": "2026-01-01"}, "gone": {"id": 2, "fetched": "2026-01-01"}}
+            cache, done, missing = montbell.update_cache(cache, ["old", "new"], 1)
+        finally:
+            montbell.http.get_json = orig
+        self.assertEqual((done, missing), (1, 0))
+        self.assertTrue(calls[0].endswith("/products/new.json"))
+        self.assertNotIn("gone", cache)
 
 
 if __name__ == "__main__":

@@ -2,9 +2,12 @@ import { buildIndex, search, defaultVariant, hasPriceSpread, nowPrice, normalize
 import { calc, fmtTwd, parseJpy } from './calc.js';
 import { scanSupported, startScan } from './scanner.js';
 
-const BRANDS = ['UQ', 'GU', 'MUJI'];
-const LABEL = { UQ: 'UNIQLO', GU: 'GU', MUJI: 'MUJI' };
-const FILES = { UQ: 'data/uq.json', GU: 'data/gu.json', MUJI: 'data/muji.json', FX: 'data/fx.json' };
+const BRANDS = ['UQ', 'GU', 'MUJI', 'NITORI', 'GW', 'NIKO', 'MB'];
+const LABEL = { UQ: 'UNIQLO', GU: 'GU', MUJI: 'MUJI', NITORI: '宜得利', GW: 'GLOBAL WORK', NIKO: 'niko and ...', MB: 'mont-bell' };
+const FILES = {
+  UQ: 'data/uq.json', GU: 'data/gu.json', MUJI: 'data/muji.json', NITORI: 'data/nitori.json',
+  GW: 'data/gw.json', NIKO: 'data/niko.json', MB: 'data/montbell.json', FX: 'data/fx.json',
+};
 const DATA_CACHE = 'data-v1';
 const STALE_MS = 3 * 24 * 60 * 60 * 1000; // 超過 3 天未更新 → 資料可能過期
 const PAGE = 40;
@@ -65,7 +68,7 @@ async function refresh() {
 }
 
 function rebuild() {
-  state.index = buildIndex({ UQ: state.data.UQ, GU: state.data.GU, MUJI: state.data.MUJI });
+  state.index = buildIndex(Object.fromEntries(BRANDS.map((b) => [b, state.data[b]])));
   state.hasAudience = state.index.entries.some((e) => Array.isArray(e.rec.audience));
 }
 
@@ -249,8 +252,8 @@ function renderResults(r) {
   const items = isText ? applyFilters(r.items, state.filters) : r.items;
   lastResults = items;
   let header;
-  if (r.mode === 'exact' && r.ambiguous) header = `<p class="result-header warn">這個編號在兩個品牌都有，請點選你看到的那件</p>`;
-  else if (!isText) header = `<p class="result-header">編號查詢・自動比對三個品牌・${r.items.length} 件</p>`;
+  if (r.mode === 'exact' && r.ambiguous) header = `<p class="result-header warn">這個編號在多個品牌都有，請點選你看到的那件</p>`;
+  else if (!isText) header = `<p class="result-header">編號查詢・自動比對所有品牌・${r.items.length} 件</p>`;
   else header = `<p class="result-header">「${esc(q)}」・${state.brand === 'ALL' ? '全部品牌' : LABEL[state.brand]}・${items.length} 件${filtersActive(state.filters) ? `（共 ${r.items.length} 件，已篩選）` : ''}</p>`;
   if (isText) header = filterBarHtml() + header;
   if (!items.length) {
@@ -317,6 +320,8 @@ function renderDetail() {
   const rec = entry.rec;
   const brandData = state.data[rec.brand] || {};
   const stale = isStale(brandData.updatedAt);
+  // mont-bell 每款輪流更新，看該款自己的確認日期（超過 8 天才算過期）
+  const checkedStale = !!rec.checkedAt && Date.now() - new Date(rec.checkedAt).getTime() > 8 * 24 * 60 * 60 * 1000;
   const spread = hasPriceSpread(rec);
   const sel = selected();
   const id = matchedId || sel.ids[0] || rec.id;
@@ -346,7 +351,9 @@ function renderDetail() {
         <h2>${esc(rec.name)}</h2>
         <div class="tw-price" id="twPrice"><span class="label">台灣售價</span>${priceHtml(priceRec, 'detail')}</div>
         <div class="updated-row">
-          <span class="updated${stale ? ' stale' : ''}">台灣資料更新：${fmtTime(brandData.updatedAt)}${stale ? '・資料可能過期' : ''}</span>
+          <span class="updated${stale || checkedStale ? ' stale' : ''}">${rec.checkedAt
+            ? `此商品價格確認於 ${rec.checkedAt.replace(/-/g, '/')}${checkedStale ? '・資料可能過期' : ''}`
+            : `台灣資料更新：${fmtTime(brandData.updatedAt)}${stale ? '・資料可能過期' : ''}`}</span>
           <a class="ext-link" id="extLink" href="${esc(sel.url)}" target="_blank" rel="noopener">在官網查看
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v6H4V6h6"/></svg>
           </a>

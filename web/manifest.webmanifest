@@ -1,7 +1,7 @@
 {
   "name": "日牌比價",
   "short_name": "日牌比價",
-  "description": "UNIQLO・GU・MUJI 日本吊牌價與台灣官網售價比價",
+  "description": "UNIQLO・GU・MUJI・宜得利・GLOBAL WORK・niko and ...・mont-bell 日本吊牌價與台灣官網售價比價",
   "lang": "zh-Hant",
   "start_url": "./",
   "scope": "./",

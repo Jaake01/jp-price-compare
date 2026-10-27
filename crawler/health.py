@@ -1,5 +1,5 @@
 """健康檢查。任一項不通過，該品牌就不覆蓋舊資料。規則見 SPEC.md。"""
-MIN_PRICE, MAX_PRICE = 10, 50_000
+MIN_PRICE, MAX_PRICE = 10, 200_000  # 宜得利沙發、床組可到 6 萬以上
 MAX_DROP = 0.20        # 商品數比上次少超過 20%
 MAX_MISSING = 0.05     # 超過 5% 缺品名、價格或連結
 MAX_BAD_PRICE = 0.05   # 超過 5% 價格不合理
