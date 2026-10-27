@@ -125,6 +125,17 @@ def update_cache(cache, pages, limit):
     return cache, done, max(0, len(todo) - done)
 
 
+_AUDIENCE_RE = re.compile(r"^(男女|女|男|兒童|孩童|幼兒|嬰兒|嬰幼兒)")
+_AUDIENCE = {"男女": ["女", "男"], "女": ["女"], "男": ["男"], "兒童": ["童"], "孩童": ["童"],
+             "幼兒": ["嬰"], "嬰兒": ["嬰"], "嬰幼兒": ["嬰"]}
+
+
+def _audience(title):
+    """MUJI 服飾品名開頭標示對象（女／男／兒童／幼兒）；家居、文具等沒有。"""
+    m = _AUDIENCE_RE.match(title or "")
+    return list(_AUDIENCE[m.group(1)]) if m else []
+
+
 def _strip_color(title, color):
     if color and title.endswith(color) and len(title) > len(color):
         return title[: -len(color)].rstrip(" -－./／・,，、_")
@@ -198,6 +209,7 @@ def transform(pages, groups, cache):
             "image": ("https:" + pic) if pic.startswith("//") else pic,
             "url": SALEPAGE_URL.format(rep_sid),
             "category": cached.get("category") or ("" if rep["_themed"] else rep["_category"]),
+            "audience": _audience(rep["title"]),
             "variants": variants,
         })
     for r in records:  # 顏色連結和商品連結相同時省略，縮小檔案

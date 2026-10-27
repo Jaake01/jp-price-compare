@@ -37,6 +37,18 @@ class FastRetailingTest(unittest.TestCase):
         self.assertNotIn("url", black)  # 和商品連結相同就省略
         self.assertIsNone(recs[1]["salePrice"])
 
+    def test_audience_from_top_categories(self):
+        p = fr_product("488298", "u1", "羅紋連帽上衣", 590, 590, ["01 OFF WHITE"])
+        p["topCategories"] = [{"name": "全商品"}, {"name": "女裝"}, {"name": "男裝"}]
+        kid = fr_product("123456", "u2", "童裝T恤", 290, 290, ["01 WHITE"])
+        kid["gender"] = "女童"
+        recs = {r["id"]: r for r in fastretailing.transform("UQ", [p, kid])}
+        self.assertEqual(recs["488298"]["audience"], ["女", "男"])
+        self.assertEqual(recs["123456"]["audience"], ["童"])
+        g = fr_product("361311", "u3", "男女適穿 拉鍊針織外套", 1290, 1290, ["09 BLACK"])
+        g["topCategories"] = [{"name": "WOMEN"}, {"name": "MEN"}]
+        self.assertEqual(fastretailing.transform("GU", [g])[0]["audience"], ["女", "男"])
+
     def test_gu_uses_gu_domain(self):
         r = fastretailing.transform("GU", [fr_product("362202", "u9", "透膚圓點T恤(長袖)", 290, 290, ["09 BLACK"])])[0]
         self.assertEqual(r["brand"], "GU")
@@ -91,6 +103,13 @@ class MujiTest(unittest.TestCase):
         self.assertEqual(len(recs), 1)
         self.assertEqual(len(recs[0]["variants"]), 1)
         self.assertEqual(recs[0]["url"], "https://shop.muji.tw/SalePage/Index/300")
+
+    def test_audience_from_title(self):
+        self.assertEqual(muji._audience("女棉保暖厚織U領八分袖T恤"), ["女"])
+        self.assertEqual(muji._audience("男抗撕裂工作短褲"), ["男"])
+        self.assertEqual(muji._audience("兒童棉保暖圓領長袖T恤"), ["童"])
+        self.assertEqual(muji._audience("幼兒棉混圓領T恤"), ["嬰"])
+        self.assertEqual(muji._audience("聚丙烯檔案盒"), [])
 
     def test_strip_color_separator(self):
         self.assertEqual(muji._strip_color("手工茶香豆干-辣味", "辣味"), "手工茶香豆干")
