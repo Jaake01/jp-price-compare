@@ -36,10 +36,10 @@ button, input { font-family: inherit; }
 #q::-webkit-search-cancel-button { display: none; }
 .icon-btn { width: 44px; height: 44px; border: 0; background: transparent; display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0; }
 .clear-btn { margin-right: -10px; }
-.chips { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; margin: 0 -16px; padding: 0 16px; }
-.chips::-webkit-scrollbar { display: none; }
-.chip { flex: none; min-width: 72px; padding: 0 16px; white-space: nowrap; height: 44px; border-radius: 22px; font-size: 14px; font-weight: 500; cursor: pointer;
+.chips { display: flex; flex-wrap: wrap; gap: 8px 6px; } /* 品牌全部同時顯示，放不下就換行 */
+.chip { position: relative; padding: 0 11px; white-space: nowrap; height: 36px; border-radius: 18px; font-size: 13px; font-weight: 500; cursor: pointer;
   background: var(--card); color: var(--text); border: 1px solid var(--input-border); }
+.chip::after { content: ''; position: absolute; inset: -4px 0; } /* 觸控區至少 44px */
 .chip[aria-pressed="true"] { background: var(--accent); color: #FFFFFF; border-color: var(--accent); }
 
 .content { flex: 1; }
