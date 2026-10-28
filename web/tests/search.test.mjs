@@ -68,14 +68,34 @@ test('文字：品名開頭 > 品名包含 > 分類包含，並依品牌篩選',
   assert.equal(search(idx, 'airism').items.length, 1);
 });
 
-test('沒有指定顏色時預設最高售價；判斷是否有價格差異', () => {
+test('沒有指定顏色時預設多數顏色的價格；判斷是否有價格差異', () => {
   const r = idx.byId.get('483457')[0].rec;
   assert.equal(defaultVariant(r, null).color, '00 WHITE');
   assert.equal(hasPriceSpread(r), true);
   assert.equal(hasPriceSpread(idx.byId.get('352118')[0].rec), false);
 });
 
-import { applyFilters, filtersActive, DEFAULT_FILTERS } from '../search.js';
+import { applyFilters, filtersActive, DEFAULT_FILTERS, typicalVariant, priceSummary } from '../search.js';
+
+test('代表價格：少數出清色不拉低整件商品', () => {
+  const v = (color, price, salePrice = null) => ({ color, price, salePrice });
+  // 4 色 790、1 色出清 390 → 顯示 790，補充「部分顏色特價 390 起」
+  const polo = { price: 790, salePrice: 390, variants: [v('00', 790), v('02', 790), v('08', 790), v('09', 790), v('57', 790, 390)] };
+  assert.equal(typicalVariant(polo).color, '00');
+  assert.deepEqual(priceSummary(polo), { now: 790, price: 790, sale: false, low: 390, high: null, lowSale: true });
+  // 多數顏色特價 → 顯示特價與原價
+  const sale = { price: 1990, salePrice: 1490, variants: [v('01', 1990, 1490), v('09', 1990, 1490), v('18', 1990)] };
+  assert.deepEqual(priceSummary(sale), { now: 1490, price: 1990, sale: true, low: null, high: 1990, lowSale: false });
+  // 同樣多時取較高價
+  assert.equal(nowOf(typicalVariant({ variants: [v('a', 790), v('b', 790, 390), v('c', 790), v('d', 790, 390)] })), 790);
+  // 沒有各色資料
+  assert.deepEqual(priceSummary({ price: 590, salePrice: 390 }), { now: 390, price: 590, sale: true, low: null, high: null, lowSale: false });
+  // 排序用代表價格；只看特價仍包含部分顏色特價
+  const items = [polo, { price: 500, salePrice: null }].map((rec, i) => ({ entry: { rec: { ...rec, id: String(i) } }, matchedId: null }));
+  assert.deepEqual(applyFilters(items, { ...DEFAULT_FILTERS, sort: 'price_asc' }).map((x) => x.entry.rec.id), ['1', '0']);
+  assert.deepEqual(applyFilters(items, { ...DEFAULT_FILTERS, saleOnly: true }).map((x) => x.entry.rec.id), ['0']);
+});
+const nowOf = (v) => (v.salePrice != null ? v.salePrice : v.price);
 
 test('篩選對象、只看特價、排序', () => {
   const mk = (id, price, salePrice, audience) => ({ entry: { rec: { id, price, salePrice, audience } }, matchedId: null });

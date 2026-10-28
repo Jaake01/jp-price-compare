@@ -1,4 +1,4 @@
-import { buildIndex, search, defaultVariant, hasPriceSpread, nowPrice, normalize, applyFilters, filtersActive, DEFAULT_FILTERS } from './search.js';
+import { buildIndex, search, defaultVariant, hasPriceSpread, nowPrice, priceSummary, normalize, applyFilters, filtersActive, DEFAULT_FILTERS } from './search.js';
 import { calc, fmtTwd, parseJpy } from './calc.js';
 import { scanSupported, startScan } from './scanner.js';
 
@@ -89,14 +89,18 @@ function rateText() {
 }
 
 function priceHtml(rec, size = 'card') {
-  const now = rec.salePrice != null ? rec.salePrice : rec.price;
-  const range = rec.salePrice != null && rec.maxPrice > rec.salePrice;
-  const nowText = range ? `${fmtTwd(now)}–${rec.maxPrice.toLocaleString('en-US')}` : fmtTwd(now);
-  if (rec.salePrice == null) return `<span class="now">${nowText}</span>`;
+  const s = priceSummary(rec);
   const tag = size === 'card' ? '特價' : '特價中';
-  return size === 'card'
-    ? `<span class="now">${nowText}</span><span class="orig">${fmtTwd(rec.price)}</span><span class="sale-tag">${tag}</span>`
-    : `<span class="orig">${fmtTwd(rec.price)}</span><span class="now">${nowText}</span><span class="sale-tag">${tag}</span>`;
+  const main = !s.sale
+    ? `<span class="now">${fmtTwd(s.now)}</span>`
+    : size === 'card'
+      ? `<span class="now">${fmtTwd(s.now)}</span><span class="orig">${fmtTwd(s.price)}</span><span class="sale-tag">${tag}</span>`
+      : `<span class="orig">${fmtTwd(s.price)}</span><span class="now">${fmtTwd(s.now)}</span><span class="sale-tag">${tag}</span>`;
+  // 少數顏色價格不同（多半是出清色）：小字補充，不影響主要價格
+  let other = '';
+  if (s.low != null) other = `部分顏色${s.lowSale && !s.sale ? '特價' : ''} ${fmtTwd(s.low)} 起`;
+  else if (s.high != null) other = `部分顏色 ${fmtTwd(s.high)}`;
+  return main + (other ? `<span class="other-price">${other}</span>` : '');
 }
 
 const PLACEHOLDER_SVG = (size) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="#7D8792" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 6a2 2 0 1 1 2-2"/><path d="M12 6v1.5L3 14h18l-9-6.5"/><path d="M4 14v2h16v-2"/></svg>`;
@@ -325,7 +329,7 @@ function renderDetail() {
   const spread = hasPriceSpread(rec);
   const sel = selected();
   const id = matchedId || sel.ids[0] || rec.id;
-  const priceRec = spread ? { ...sel, maxPrice: nowPrice(sel), brand: rec.brand } : rec;
+  const priceRec = spread ? { ...sel, brand: rec.brand } : rec;
   const variants = spread ? `
     <div class="card variants">
       <h3>各顏色價格</h3>

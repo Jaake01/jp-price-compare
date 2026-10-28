@@ -1,6 +1,6 @@
 // 離線快取：網頁本身先用快取、背景更新；商品圖只快取看過的。
 // 商品資料與匯率由 app.js 自己存在 Cache Storage（data-v1）。
-const SHELL = 'shell-v8';
+const SHELL = 'shell-v10';
 const IMAGES = 'img-v1';
 const FONTS = 'font-v1';
 const MAX_IMAGES = 400;

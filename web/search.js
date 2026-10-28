@@ -68,7 +68,29 @@ export function search(index, query, brand = 'ALL') {
   return { mode: 'text', q, items: ranked.map((r) => ({ entry: r.entry, matchedId: null })) };
 }
 
-// 詳細頁預設選的顏色：搜尋的編號所在的顏色；否則選最高售價（保守計算）
+// 代表價格的顏色：最多顏色共用的售價（少數出清色不會拉低整件商品）；同樣多時取較高價
+export function typicalVariant(rec) {
+  const vs = rec.variants || [];
+  if (!vs.length) return null;
+  const count = new Map();
+  for (const v of vs) count.set(nowPrice(v), (count.get(nowPrice(v)) || 0) + 1);
+  let best = null;
+  for (const [p, n] of count) if (!best || n > best.n || (n === best.n && p > best.p)) best = { p, n };
+  return vs.find((v) => nowPrice(v) === best.p);
+}
+
+// 列表顯示用：代表價格＋其他顏色的最低／最高價。沒有各色資料時用整件商品的價格
+export function priceSummary(rec) {
+  const t = typicalVariant(rec);
+  if (!t) return { now: nowPrice(rec), price: rec.price, sale: rec.salePrice != null, low: null, high: null, lowSale: false };
+  const now = nowPrice(t);
+  const others = rec.variants.map(nowPrice);
+  const low = Math.min(...others), high = Math.max(...others);
+  const lowSale = low < now && rec.variants.some((v) => v.salePrice != null && nowPrice(v) === low);
+  return { now, price: t.price, sale: t.salePrice != null, low: low < now ? low : null, high: high > now ? high : null, lowSale };
+}
+
+// 詳細頁預設選的顏色：搜尋的編號所在的顏色；否則選代表價格的顏色（和列表顯示一致）
 export function defaultVariant(rec, matchedId) {
   const vs = rec.variants || [];
   if (!vs.length) return null;
@@ -76,7 +98,7 @@ export function defaultVariant(rec, matchedId) {
     const hit = vs.find((v) => (v.ids || []).map(normalize).includes(matchedId));
     if (hit) return hit;
   }
-  return vs.reduce((best, v) => (nowPrice(v) > nowPrice(best) ? v : best), vs[0]);
+  return typicalVariant(rec);
 }
 
 // 顏色之間價格是否不同
@@ -92,8 +114,9 @@ export function filtersActive(opts) {
   return opts.audience !== 'ALL' || opts.saleOnly || opts.sort !== 'rel';
 }
 
-const recNow = (rec) => (rec.salePrice != null ? rec.salePrice : rec.price);
-const discount = (rec) => (rec.price ? 1 - recNow(rec) / rec.price : 0);
+// 排序用代表價格；「只看特價」仍是任一顏色特價就算
+const recNow = (rec) => priceSummary(rec).now;
+const discount = (rec) => { const s = priceSummary(rec); return s.price ? 1 - s.now / s.price : 0; };
 
 export function applyFilters(items, opts) {
   let out = items;
