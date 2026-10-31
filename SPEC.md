@@ -50,7 +50,7 @@
 
 每個品牌檔案外層另有 `brand`、`updatedAt`（ISO 時間）、`count`，商品放在 `items` 陣列。`fx.json` 存日圓匯率（`rate`：1 日圓 = ? 新台幣）、來源與日期。匯率來源為國際參考匯率（ExchangeRate-API 免費每日資料）：台灣銀行牌告網站有反機器人驗證，雲端抓不到（2026-10-26 決定改用）。前端需標示「國際參考匯率」，提醒與實際刷卡匯率會有差距。
 
-**日本官網價格**（2026-10-31 新增，只有 UNIQLO、GU）：`data/uq_jp.json`、`gu_jp.json`，外層同樣有 `brand`、`updatedAt`、`count`，`items` 是以 6 位數編號為鍵的物件：`{ name（日文品名）, url（日本官網商品頁）, variants: [{ color（例如「57 OLIVE」，色碼與台灣相同）, price（含稅日圓）, sale（是否特價中） }] }`。日本官網 API 不提供特價前的價格。MUJI 日本網路商店從雲端（包括 GitHub 的伺服器）都連不上，暫不提供。來源見 `docs/recon-3.md`。
+**日本官網價格**（2026-10-31 新增，UNIQLO、GU、宜得利）：`data/uq_jp.json`、`gu_jp.json`、`nitori_jp.json`，外層同樣有 `brand`、`updatedAt`、`count`，`items` 是以 6 位數編號為鍵的物件：`{ name（日文品名）, url（日本官網商品頁）, variants: [{ color（例如「57 OLIVE」，色碼與台灣相同）, price（含稅日圓）, sale（是否特價中） }] }`。日本官網 API 不提供特價前的價格。宜得利只有代表 SKU 的價格，另有 `min`、`max`（各色各尺寸的價格區間）與 `checkedAt`（確認日期）。MUJI 日本網路商店從雲端（包括 GitHub 的伺服器）都連不上，暫不提供。來源見 `docs/recon-3.md`。
 
 資料檔每次覆蓋，不保留 Git 歷史版本：發布到獨立的 `data` 分支，每次以 force push 取代成只有一個 commit，避免儲存庫逐年變大。MUJI 的 JAN 快取 `muji_cache.json` 也存在這個分支。
 
@@ -64,6 +64,7 @@
 - 宜得利、GLOBAL WORK、niko and ...、mont-bell（2026-10-27 新增）：資料來源與編號見 `docs/recon-2.md`。GLOBAL WORK、niko and ... 在 and ST TW（91APP），和 MUJI 共用 `crawler/nineyi.py`。mont-bell 列表頁價格不可靠，只用單品資料、每天輪流更新約 250 款，每款記錄確認日期 `checkedAt`，前端顯示該日期（超過 8 天標示可能過期）。
 - MUJI 台灣網路商店 shop.muji.tw：已確認建在 91APP 上。每天用列表 API 更新價格；只有新出現的商品頁才抓一次商品頁 HTML 補齊各尺寸 JAN，結果存成快取檔（JAN 不會變），第一次補齊分多天執行。不使用 robots.txt 禁止的端點。
 - UNIQLO、GU 日本官網（日本官網價格）：和台灣不同的 commerce API，一次列出全站商品，每天約 30 次請求。健康檢查同台灣資料（商品數、價格範圍 ¥10–¥2,000,000）。
+- 宜得利日本官網：分類頁 HTML 內嵌商品 JSON，但每頁約 10 秒、全站約 550 頁，所以每天輪流抓 80 頁（約 20 分鐘），約一週輪完，結果存 `nitori_jp_cache.json`；21 天沒看到的商品移除。前端顯示日本價格的確認日期。
 - 優先使用網站自己載入的 JSON 資料（瀏覽器背後呼叫的 API），其次才解析 HTML。不需登入。
 - 請求間隔至少 1 秒，帶上正常的 User-Agent，每天只跑一次。
 

@@ -8,7 +8,7 @@ on:
       force_fail:
         description: "測試用：讓一個品牌故意失敗"
         type: choice
-        options: [none, uq, gu, muji, nitori, gw, niko, montbell, uq_jp, gu_jp, fx]
+        options: [none, uq, gu, muji, nitori, gw, niko, montbell, uq_jp, gu_jp, nitori_jp, fx]
         default: none
       muji_pdp_limit:
         description: "這次最多抓幾個 MUJI 商品頁補 JAN"

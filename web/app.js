@@ -7,7 +7,7 @@ const LABEL = { UQ: 'UNIQLO', GU: 'GU', MUJI: 'MUJI', NITORI: '宜得利', GW: '
 const FILES = {
   UQ: 'data/uq.json', GU: 'data/gu.json', MUJI: 'data/muji.json', NITORI: 'data/nitori.json',
   GW: 'data/gw.json', NIKO: 'data/niko.json', MB: 'data/montbell.json', FX: 'data/fx.json',
-  UQ_JP: 'data/uq_jp.json', GU_JP: 'data/gu_jp.json', MUJI_JP: 'data/muji_jp.json', // 日本官網價格
+  UQ_JP: 'data/uq_jp.json', GU_JP: 'data/gu_jp.json', NITORI_JP: 'data/nitori_jp.json', // 日本官網價格
 };
 const DATA_CACHE = 'data-v1';
 const STALE_MS = 3 * 24 * 60 * 60 * 1000; // 超過 3 天未更新 → 資料可能過期
@@ -412,7 +412,7 @@ function jpHtml(rec, sel) {
         <span class="jp-num">¥${p.price.toLocaleString('en-US')}</span>${p.sale ? '<span class="sale-tag">特價</span>' : ''}
         <button type="button" class="use-jp" data-jpy="${p.price}">填入計算</button>
       </div>
-      <p class="jp-note">${notes.join('・')}${notes.length ? '・' : ''}店內吊牌價可能不同，請以吊牌為準。
+      <p class="jp-note">${notes.join('・')}${notes.length ? '・' : ''}${jp.checkedAt ? `日本價格確認於 ${jp.checkedAt.replace(/-/g, '/')}・` : ''}店內吊牌價可能不同，請以吊牌為準。
         <a href="${esc(jp.url)}" target="_blank" rel="noopener">日本官網</a></p>
     </div>`;
 }

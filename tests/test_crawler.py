@@ -287,5 +287,33 @@ class JapanTest(unittest.TestCase):
         self.assertFalse(ok)
 
 
+    def _nitori_html(self, total_pages, codes):
+        prods = [{"code": c, "name": "枕", "url": f"/ec/product/{c}/", "price": {"value": 2990},
+                  "priceRange": {"minPrice": {"value": 2990}, "maxPrice": {"value": 3990}}} for c in codes]
+        return ('<script>{"pagination":{"currentPage":0,"pageSize":60,"totalPages":%d,"totalResults":9},'
+                '"products":%s}</script>' % (total_pages, json.dumps(prods))).encode()
+
+    def test_nitori_rotation_resumes_and_wraps(self):
+        pages = {"/ec/cat/Bed/1/": self._nitori_html(2, ["7980716s", "7550863-7550864s"]),
+                 "/ec/cat/Bed/2/": self._nitori_html(2, ["2113400063808s"]),
+                 "/ec/cat/Sofa/1/": self._nitori_html(1, ["1234567s"])}
+        sitemap = (b"<loc>https://www.nitori-net.jp/ec/cat/Sofa/1/</loc>"
+                   b"<loc>https://www.nitori-net.jp/ec/cat/Bed/1/</loc>"
+                   b"<loc>https://www.nitori-net.jp/ec/cat/Bed/Pillow/1/</loc>")
+        orig = japan.http.request
+        japan.http.request = lambda url, **kw: sitemap if url.endswith(".xml") else pages[url.replace(japan.NITORI, "")]
+        try:
+            cache, done = japan.update_nitori_cache({"items": {"9999999": {"checked": "2026-01-01"}}}, 2, "2026-10-31")
+            self.assertEqual((done, cache["cursor"]), (2, {"cat": "Sofa", "page": 1}))
+            self.assertEqual(sorted(cache["items"]), ["2113400063808", "7980716"])  # 組合商品略過、過期的移除
+            cache, done = japan.update_nitori_cache(cache, 2, "2026-11-01")
+            self.assertEqual(cache["cursor"], {"cat": "Bed", "page": 2})  # 最後一個分類抓完回到第一個
+        finally:
+            japan.http.request = orig
+        r = japan.transform_nitori(cache)["1234567"]
+        self.assertEqual((r["min"], r["max"], r["checkedAt"]), (2990, 3990, "2026-11-01"))
+        self.assertEqual(r["url"], "https://www.nitori-net.jp/ec/product/1234567s/")
+
+
 if __name__ == "__main__":
     unittest.main()

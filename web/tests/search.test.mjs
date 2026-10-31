@@ -127,4 +127,7 @@ test('日本官網價格：同色代碼優先，否則用多數顏色的價格',
   assert.deepEqual(jpPriceFor(hit, '57 OLIVE'), { price: 1290, sale: true, matched: true, low: null, high: 1990 });
   assert.deepEqual(jpPriceFor(hit, '69 NAVY'), { price: 1990, sale: false, matched: false, low: 1290, high: null });
   assert.deepEqual(jpPriceFor(hit, ''), { price: 1990, sale: false, matched: false, low: 1290, high: null });
+  // 宜得利：只有代表價格與價格區間
+  const nitori = { variants: [{ color: '', price: 2990, sale: false }], min: 2990, max: 3990 };
+  assert.deepEqual(jpPriceFor(nitori, '白色'), { price: 2990, sale: false, matched: false, low: null, high: 3990 });
 });

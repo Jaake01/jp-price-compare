@@ -33,7 +33,7 @@ jobs:
           rm -rf _site/tests _site/data
           mkdir -p _site/data
           git fetch --depth=1 origin data
-          for f in uq gu muji nitori gw niko montbell uq_jp gu_jp fx; do
+          for f in uq gu muji nitori gw niko montbell uq_jp gu_jp nitori_jp fx; do
             git show FETCH_HEAD:$f.json > _site/data/$f.json 2>/dev/null || { rm -f _site/data/$f.json; echo "尚無 $f.json"; }
           done
           ls -la _site _site/data

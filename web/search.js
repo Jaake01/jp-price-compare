@@ -152,7 +152,7 @@ export function jpPriceFor(jp, color) {
     for (const [p, n] of count) if (!best || n > best.n || (n === best.n && p > best.p)) best = { p, n };
     pick = vs.find((v) => v.price === best.p);
   }
-  const prices = vs.map((v) => v.price);
+  const prices = vs.map((v) => v.price).concat([jp.min, jp.max].filter((x) => x != null)); // 宜得利只有價格區間
   const low = Math.min(...prices), high = Math.max(...prices);
   return { price: pick.price, sale: pick.sale, matched: !!match,
     low: low < pick.price ? low : null, high: high > pick.price ? high : null };
