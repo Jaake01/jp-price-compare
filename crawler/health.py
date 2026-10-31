@@ -44,3 +44,22 @@ def check_fx(fx, prev):
         if change > FX_MAX_CHANGE:
             errors.append(f"匯率單日變動 {change:.1%}（{prev['rate']} → {rate}），超過 5%")
     return not errors, errors
+
+
+JPY_RANGE = (10, 2_000_000)
+
+
+def check_jp(records, prev_count):
+    """日本官網價格：{編號: {name, url, variants}}。剔除價格不合理的顏色，規則同台灣資料。"""
+    n = len(records)
+    if n == 0:
+        return False, ["商品數為 0"], records
+    bad = [k for k, r in records.items()
+           if not r["variants"] or any(not JPY_RANGE[0] <= v["price"] <= JPY_RANGE[1] for v in r["variants"])]
+    errors = []
+    if len(bad) / n > MAX_BAD_PRICE:
+        errors.append(f"{len(bad)}/{n} 筆日本官網價格不合理（上限 5%），例：{'、'.join(bad[:5])}")
+    kept = {k: r for k, r in records.items() if k not in set(bad)}
+    if prev_count and len(kept) < prev_count * (1 - MAX_DROP):
+        errors.append(f"商品數 {len(kept)} 比上次 {prev_count} 少超過 20%")
+    return not errors, errors, kept

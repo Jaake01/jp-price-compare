@@ -1,4 +1,4 @@
-import { buildIndex, search, defaultVariant, hasPriceSpread, nowPrice, priceSummary, normalize, applyFilters, filtersActive, DEFAULT_FILTERS } from './search.js';
+import { buildIndex, search, defaultVariant, hasPriceSpread, nowPrice, priceSummary, normalize, applyFilters, filtersActive, DEFAULT_FILTERS, findJp, jpPriceFor } from './search.js';
 import { calc, fmtTwd, parseJpy } from './calc.js';
 import { scanSupported, startScan } from './scanner.js';
 
@@ -7,6 +7,7 @@ const LABEL = { UQ: 'UNIQLO', GU: 'GU', MUJI: 'MUJI', NITORI: '宜得利', GW: '
 const FILES = {
   UQ: 'data/uq.json', GU: 'data/gu.json', MUJI: 'data/muji.json', NITORI: 'data/nitori.json',
   GW: 'data/gw.json', NIKO: 'data/niko.json', MB: 'data/montbell.json', FX: 'data/fx.json',
+  UQ_JP: 'data/uq_jp.json', GU_JP: 'data/gu_jp.json', MUJI_JP: 'data/muji_jp.json', // 日本官網價格
 };
 const DATA_CACHE = 'data-v1';
 const STALE_MS = 3 * 24 * 60 * 60 * 1000; // 超過 3 天未更新 → 資料可能過期
@@ -363,6 +364,7 @@ function renderDetail() {
           </a>
         </div>
       </div>
+      ${jpHtml(rec, sel)}
       ${variants}
       <div class="card">
         <label for="jpy" class="jpy-label">日本吊牌價（含稅）</label>
@@ -374,6 +376,29 @@ function renderDetail() {
       <div id="calcOut"></div>
     </div>`;
   renderCalc();
+}
+
+// 日本官網價格（只有部分品牌有資料）。可一鍵填入下方計算
+function jpHtml(rec, sel) {
+  const jp = findJp(state.data[rec.brand + '_JP'], rec, sel.ids);
+  if (!jp) return '';
+  const p = jpPriceFor(jp, state.detail.variant && state.detail.variant.color);
+  if (!p) return '';
+  const fx = state.data.FX;
+  const notes = [];
+  if (fx) notes.push(`≈ ${fmtTwd(Math.round(p.price * fx.rate))}`);
+  if (p.low != null) notes.push(`部分顏色 ¥${p.low.toLocaleString('en-US')} 起`);
+  else if (p.high != null) notes.push(`部分顏色 ¥${p.high.toLocaleString('en-US')}`);
+  return `
+    <div class="card jp-price">
+      <div class="jp-row">
+        <span class="label">日本官網價（含稅）</span>
+        <span class="jp-num">¥${p.price.toLocaleString('en-US')}</span>${p.sale ? '<span class="sale-tag">特價</span>' : ''}
+        <button type="button" class="use-jp" data-jpy="${p.price}">填入計算</button>
+      </div>
+      <p class="jp-note">${notes.join('・')}${notes.length ? '・' : ''}店內吊牌價可能不同，請以吊牌為準。
+        <a href="${esc(jp.url)}" target="_blank" rel="noopener">日本官網</a></p>
+    </div>`;
 }
 
 // 只更新計算結果，避免輸入日幣時重畫輸入框
@@ -468,6 +493,14 @@ content.addEventListener('click', (e) => {
     const y = window.scrollY;
     renderDetail();
     window.scrollTo(0, y);
+    return;
+  }
+  const useJp = e.target.closest('.use-jp');
+  if (useJp) {
+    state.jpyStr = useJp.dataset.jpy;
+    $('#jpy').value = state.jpyStr;
+    renderCalc();
+    $('#calcOut').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     return;
   }
   const aud = e.target.closest('.fchip[data-aud]');

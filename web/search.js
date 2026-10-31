@@ -129,3 +129,31 @@ export function applyFilters(items, opts) {
   }[opts.sort];
   return by ? [...out].sort(by) : out; // sort 是穩定排序，同價時保留相關度順序
 }
+
+// 日本官網價格。jpData：{ items: { 編號: { name, url, variants: [{ color, price, sale }] } } }
+// 用台灣商品的編號找；顏色代碼（例如「57 OLIVE」的 57）相同就用該色價格，否則用最多顏色共用的價格
+export function findJp(jpData, rec, ids = []) {
+  const items = jpData && jpData.items;
+  if (!items) return null;
+  for (const id of [...ids, rec.id, ...(rec.altIds || [])]) if (items[id]) return items[id];
+  return null;
+}
+
+export function jpPriceFor(jp, color) {
+  const vs = jp.variants || [];
+  if (!vs.length) return null;
+  const code = (color || '').split(' ')[0];
+  const match = code ? vs.find((v) => v.color.split(' ')[0] === code) : null;
+  let pick = match;
+  if (!pick) {
+    const count = new Map();
+    for (const v of vs) count.set(v.price, (count.get(v.price) || 0) + 1);
+    let best = null;
+    for (const [p, n] of count) if (!best || n > best.n || (n === best.n && p > best.p)) best = { p, n };
+    pick = vs.find((v) => v.price === best.p);
+  }
+  const prices = vs.map((v) => v.price);
+  const low = Math.min(...prices), high = Math.max(...prices);
+  return { price: pick.price, sale: pick.sale, matched: !!match,
+    low: low < pick.price ? low : null, high: high > pick.price ? high : null };
+}

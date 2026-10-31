@@ -112,3 +112,19 @@ test('篩選對象、只看特價、排序', () => {
   assert.equal(filtersActive({ ...DEFAULT_FILTERS, saleOnly: true }), true);
   assert.equal(applyFilters(items, DEFAULT_FILTERS), items); // 沒篩選時不複製
 });
+
+import { findJp, jpPriceFor } from '../search.js';
+
+test('日本官網價格：同色代碼優先，否則用多數顏色的價格', () => {
+  const jp = { items: { '475367': { url: 'u', variants: [
+    { color: '00 WHITE', price: 1990, sale: false }, { color: '09 BLACK', price: 1990, sale: false },
+    { color: '57 OLIVE', price: 1290, sale: true }] } } };
+  const rec = { id: '465196', altIds: ['475367'] };
+  const hit = findJp(jp, rec);
+  assert.equal(hit.url, 'u');
+  assert.equal(findJp(jp, { id: '999999' }), null);
+  assert.equal(findJp(undefined, rec), null);
+  assert.deepEqual(jpPriceFor(hit, '57 OLIVE'), { price: 1290, sale: true, matched: true, low: null, high: 1990 });
+  assert.deepEqual(jpPriceFor(hit, '69 NAVY'), { price: 1990, sale: false, matched: false, low: 1290, high: null });
+  assert.deepEqual(jpPriceFor(hit, ''), { price: 1990, sale: false, matched: false, low: 1290, high: null });
+});

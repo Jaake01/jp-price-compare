@@ -25,6 +25,7 @@ GitHub Actions（`.github/workflows/update-data.yml`）每天台灣時間 05:37 
 | 檔案 | 內容 |
 | --- | --- |
 | `uq.json`、`gu.json`、`muji.json`、`nitori.json`、`gw.json`、`niko.json`、`montbell.json` | 各品牌商品（格式見 SPEC.md「資料規格」） |
+| `uq_jp.json`、`gu_jp.json` | UNIQLO、GU 日本官網價格（以 6 位數編號為鍵） |
 | `fx.json` | 日圓匯率 |
 | `muji_cache.json` | MUJI 各商品頁的全部尺寸 JAN 快取 |
 | `gw_cache.json`、`niko_cache.json` | GLOBAL WORK、niko and ... 各商品頁的各色各尺寸條碼快取 |

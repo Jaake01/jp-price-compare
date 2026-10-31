@@ -12,7 +12,8 @@ import urllib.request
 API = "https://api.github.com"
 LABEL = "data-update-failure"
 NAMES = {"UQ": "UNIQLO", "GU": "GU", "MUJI": "MUJI", "NITORI": "宜得利", "GW": "GLOBAL WORK",
-         "NIKO": "niko and ...", "MONTBELL": "mont-bell", "FX": "匯率"}
+         "NIKO": "niko and ...", "MONTBELL": "mont-bell", "UQ_JP": "UNIQLO 日本官網",
+         "GU_JP": "GU 日本官網", "FX": "匯率"}
 
 
 def title_for(brand):

@@ -13,9 +13,9 @@ import sys
 import traceback
 from datetime import datetime, timezone
 
-from . import adastria, fastretailing, fx, health, montbell, muji, nitori
+from . import adastria, fastretailing, fx, health, japan, montbell, muji, nitori
 
-BRANDS = ["uq", "gu", "muji", "nitori", "gw", "niko", "montbell", "fx"]
+BRANDS = ["uq", "gu", "muji", "nitori", "gw", "niko", "montbell", "uq_jp", "gu_jp", "fx"]
 MUJI_CACHE = "muji_cache.json"
 
 
@@ -82,6 +82,15 @@ def run_brand(key, args, prev_dir):
         _write(os.path.join(args.out, "montbell_cache.json"), cache)
         notes.append(f"單品資料：本次更新 {done} 款，還沒抓過 {missing} 款")
         records = montbell.transform(cache)
+    elif key in ("uq_jp", "gu_jp"):  # 日本官網價格
+        brand = key[:2].upper()
+        items, total = japan.fetch_fr(brand, max_pages=1 if sample else None)
+        if not sample and len(items) < total:
+            raise RuntimeError(f"只抓到 {len(items)}/{total} 筆")
+        records = japan.transform_fr(brand, items)
+        prev = _load(os.path.join(prev_dir, f"{key}.json"))
+        ok, errors, kept = health.check_jp(records, None if sample else (prev or {}).get("count"))
+        return dict(japan.jp_file(brand, kept), updatedAt=_now()), errors, notes
     else:
         data = fx.fetch()
         ok, errors = health.check_fx(data, _load(os.path.join(prev_dir, "fx.json")))
