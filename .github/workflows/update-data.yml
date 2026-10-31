@@ -166,7 +166,7 @@ jobs:
             每日資料更新時，品牌「${{ matrix.issue.brand }}」失敗了，錯誤如下：
             ${{ toJSON(matrix.issue.errors) }}
 
-            背景：先讀 SPEC.md「爬蟲與自動維護」「資料規格」和 docs/recon.md、docs/recon-2.md，爬蟲在 crawler/。
+            背景：先讀 SPEC.md「爬蟲與自動維護」「資料規格」和 docs/recon.md、docs/recon-2.md、docs/recon-3.md，爬蟲在 crawler/。
             1. 用小量抓取重現：python -m crawler.run --brands ${{ matrix.issue.key }} --sample --prev /nonexistent --out /tmp/out --report /tmp/report.json --muji-pdp-limit 3 --pdp-limit 3 --montbell-limit 3
                如果錯誤是「手動觸發的測試失敗（--force-fail）」，代表這是測試，不用修，直接到第 4 步說明。
             2. 找出原因（例如官網 API 欄位或網址改了），只修改 crawler/ 和 tests/ 裡的程式。
