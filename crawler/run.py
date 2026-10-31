@@ -13,9 +13,9 @@ import sys
 import traceback
 from datetime import datetime, timezone
 
-from . import adastria, fastretailing, fx, health, montbell, muji, nitori
+from . import adastria, fastretailing, fx, health, japan, montbell, muji, nitori
 
-BRANDS = ["uq", "gu", "muji", "nitori", "gw", "niko", "montbell", "fx"]
+BRANDS = ["uq", "gu", "muji", "nitori", "gw", "niko", "montbell", "uq_jp", "gu_jp", "nitori_jp", "fx"]
 MUJI_CACHE = "muji_cache.json"
 
 
@@ -82,6 +82,25 @@ def run_brand(key, args, prev_dir):
         _write(os.path.join(args.out, "montbell_cache.json"), cache)
         notes.append(f"單品資料：本次更新 {done} 款，還沒抓過 {missing} 款")
         records = montbell.transform(cache)
+    elif key in ("uq_jp", "gu_jp"):  # 日本官網價格
+        brand = key[:2].upper()
+        items, total = japan.fetch_fr(brand, max_pages=1 if sample else None)
+        if not sample and len(items) < total:
+            raise RuntimeError(f"只抓到 {len(items)}/{total} 筆")
+        records = japan.transform_fr(brand, items)
+        prev = _load(os.path.join(prev_dir, f"{key}.json"))
+        ok, errors, kept = health.check_jp(records, None if sample else (prev or {}).get("count"))
+        return dict(japan.jp_file(brand, kept), updatedAt=_now()), errors, notes
+    elif key == "nitori_jp":  # 宜得利日本官網價格：分類頁每天輪流抓一部分
+        brand = "NITORI"
+        cache = _load(os.path.join(prev_dir, "nitori_jp_cache.json")) or {}
+        cache, done = japan.update_nitori_cache(cache, 1 if sample else args.nitori_jp_pages)
+        _write(os.path.join(args.out, "nitori_jp_cache.json"), cache)
+        notes.append(f"本次抓 {done} 個分類頁，下次從 {cache['cursor']['cat']} 第 {cache['cursor']['page']} 頁接著抓")
+        records = japan.transform_nitori(cache)
+        prev = _load(os.path.join(prev_dir, f"{key}.json"))
+        ok, errors, kept = health.check_jp(records, None if sample else (prev or {}).get("count"))
+        return dict(japan.jp_file(brand, kept), updatedAt=_now()), errors, notes
     else:
         data = fx.fetch()
         ok, errors = health.check_fx(data, _load(os.path.join(prev_dir, "fx.json")))
@@ -104,6 +123,7 @@ def main(argv=None):
     ap.add_argument("--muji-pdp-limit", type=int, default=500, help="每次最多抓幾個 MUJI 商品頁補 JAN")
     ap.add_argument("--pdp-limit", type=int, default=300, help="GLOBAL WORK、niko and 每次最多抓幾個商品頁補條碼")
     ap.add_argument("--montbell-limit", type=int, default=250, help="mont-bell 每次最多更新幾款單品資料")
+    ap.add_argument("--nitori-jp-pages", type=int, default=80, help="宜得利日本官網每次抓幾個分類頁（每頁約 10 秒）")
     ap.add_argument("--sample", action="store_true", help="只抓少量資料，確認連得上（不做商品數檢查）")
     args = ap.parse_args(argv)
     os.makedirs(args.out, exist_ok=True)

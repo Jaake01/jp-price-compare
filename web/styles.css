@@ -180,3 +180,10 @@ button, input { font-family: inherit; }
 .empty.filtered { padding: 40px 24px; }
 .clear-filters.big { height: 44px; padding: 0 20px; border: 1px solid var(--accent); border-radius: 22px; font-size: 15px; }
 .other-price { flex-basis: 100%; font-size: 12px; color: var(--muted); }
+.jp-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.jp-row .label { font-size: 13px; color: var(--muted); }
+.jp-num { font-size: 20px; font-weight: 700; }
+.use-jp { display: inline-flex; align-items: center; text-decoration: none; margin-left: auto; height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid var(--accent); background: var(--card); color: var(--accent); font-size: 13px; font-weight: 500; cursor: pointer; position: relative; }
+.use-jp::after { content: ''; position: absolute; inset: -4px 0; } /* 觸控區至少 44px */
+.jp-note { margin: 0; font-size: 12px; color: var(--muted); line-height: 1.6; }
+.jp-note a { color: var(--accent); }
