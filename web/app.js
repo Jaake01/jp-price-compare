@@ -379,7 +379,23 @@ function renderDetail() {
 }
 
 // 日本官網價格（只有部分品牌有資料）。可一鍵填入下方計算
+// MUJI 日本網路商店擋雲端連線、抓不到價格：用條碼（JAN，台日相同）連到日本官網商品頁，讓使用者自己看
+function mujiJpLink(rec, sel) {
+  const { matchedId } = state.detail;
+  const jan = [matchedId, ...sel.ids, rec.id].find((x) => /^4[59]\d{11}$/.test(x || ''));
+  if (!jan) return '';
+  return `
+    <div class="card jp-price">
+      <div class="jp-row">
+        <span class="label">日本官網價</span>
+        <a class="use-jp" href="https://www.muji.com/jp/ja/store/cmdty/detail/${jan}" target="_blank" rel="noopener">在日本官網查</a>
+      </div>
+      <p class="jp-note">用條碼 ${jan} 打開日本無印良品網路商店；日本沒賣這個顏色或尺寸時會找不到。看到價格後可填入下方計算。</p>
+    </div>`;
+}
+
 function jpHtml(rec, sel) {
+  if (rec.brand === 'MUJI') return mujiJpLink(rec, sel);
   const jp = findJp(state.data[rec.brand + '_JP'], rec, sel.ids);
   if (!jp) return '';
   const p = jpPriceFor(jp, state.detail.variant && state.detail.variant.color);

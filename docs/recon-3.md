@@ -25,3 +25,4 @@
 
 - `www.muji.com` 從這個開發環境、以及 GitHub Actions 的伺服器（Azure 美東）都連不上：HTTP/2 立即被重置，HTTP/1.1 逾時，連 robots.txt 都拿不到。看起來是擋雲端／資料中心的連線。
 - 這是網站有意的阻擋，不嘗試繞過。暫不提供 MUJI 日本官網價格。
+- 替代做法（2026-10-31 決定）：商品頁放「在日本官網查」連結，用使用者手機打開 `https://www.muji.com/jp/ja/store/cmdty/detail/{JAN}`（日本官網商品頁網址即 13 位數 JAN，例如 MUJI 員工推薦文章裡的 `detail/4547315079469`）。
