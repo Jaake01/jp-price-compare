@@ -131,3 +131,16 @@ test('日本官網價格：同色代碼優先，否則用多數顏色的價格',
   const nitori = { variants: [{ color: '', price: 2990, sale: false }], min: 2990, max: 3990 };
   assert.deepEqual(jpPriceFor(nitori, '白色'), { price: 2990, sale: false, matched: false, low: null, high: 3990 });
 });
+
+import { ean8Body } from '../search.js';
+
+test('EAN-8 條碼（7 位數貨號＋檢查碼）也找得到', () => {
+  assert.equal(ean8Body('85117471'), '8511747');
+  assert.equal(ean8Body('85117472'), null); // 檢查碼不對
+  assert.equal(ean8Body('8511747'), null);
+  const idx2 = buildIndex({ NITORI: { items: [{ brand: 'NITORI', id: '8511747', altIds: [], name: '不留痕雙牙刷架 JP01', price: 69, salePrice: null, maxPrice: 69, url: 'u', category: '', variants: [] }] } });
+  const r = search(idx2, '85117471');
+  assert.equal(r.mode, 'exact');
+  assert.equal(r.jump.matchedId, '8511747');
+  assert.equal(search(idx2, '85117472').items.length, 0);
+});

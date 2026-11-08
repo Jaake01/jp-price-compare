@@ -36,10 +36,21 @@ export function buildIndex(datasets) {
  * mode：empty | exact | prefix | text
  * jump：完全吻合只有 1 件、且沒有更長的編號以它開頭時，直接打開的那件
  */
+// EAN-8 條碼 = 7 位數 + 檢查碼。宜得利標籤的條碼就是 7 位數貨號加檢查碼
+export function ean8Body(q) {
+  if (!/^\d{8}$/.test(q)) return null;
+  const d = [...q].map(Number);
+  const sum = d.slice(0, 7).reduce((s, x, i) => s + x * (i % 2 ? 1 : 3), 0);
+  return (10 - (sum % 10)) % 10 === d[7] ? q.slice(0, 7) : null;
+}
+
 export function search(index, query, brand = 'ALL') {
-  const q = normalize(query);
+  let q = normalize(query);
   if (!q) return { mode: 'empty', q, items: [] };
   if (isNumeric(q)) {
+    // 掃到 8 位數條碼查不到時，改用去掉檢查碼的 7 位數貨號
+    const body = ean8Body(q);
+    if (body && !index.byId.has(q) && index.byId.has(body)) q = body;
     const exact = index.byId.get(q) || [];
     const prefix = [];
     for (const e of index.entries) {
