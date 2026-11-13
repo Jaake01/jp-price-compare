@@ -51,6 +51,8 @@ export function search(index, query, brand = 'ALL') {
     // 掃到 8 位數條碼查不到時，改用去掉檢查碼的 7 位數貨號
     const body = ean8Body(q);
     if (body && !index.byId.has(q) && index.byId.has(body)) q = body;
+    // UNIQLO、GU 吊牌印「341-486103」（部門－商品編號），照抄輸入時改用後 6 位
+    if (/^\d{9}$/.test(q) && !index.byId.has(q) && index.byId.has(q.slice(3))) q = q.slice(3);
     const exact = index.byId.get(q) || [];
     const prefix = [];
     for (const e of index.entries) {

@@ -144,3 +144,11 @@ test('EAN-8 條碼（7 位數貨號＋檢查碼）也找得到', () => {
   assert.equal(r.jump.matchedId, '8511747');
   assert.equal(search(idx2, '85117472').items.length, 0);
 });
+
+test('UNIQLO 吊牌「341-486103」照抄輸入也找得到', () => {
+  const idx3 = buildIndex({ UQ: { items: [{ brand: 'UQ', id: '486103', altIds: [], name: 'AIRism棉質條紋圓領T恤(長袖)', price: 590, salePrice: 490, maxPrice: 490, url: 'u', category: '', variants: [] }] } });
+  const r = search(idx3, '341-486103');
+  assert.equal(r.mode, 'exact');
+  assert.equal(r.jump.matchedId, '486103');
+  assert.equal(search(idx3, '341-999999').items.length, 0);
+});
