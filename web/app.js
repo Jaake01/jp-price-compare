@@ -225,7 +225,7 @@ function renderEmpty(r) {
 // 掃到的條碼查無時提醒：UQ/GU 吊牌條碼不一定是 6 位數商品編號
 function scanNote(q) {
   if (!state.scanned || normalize(q) !== normalize(state.scanned)) return '';
-  return `<div class="notice">掃到的條碼是「${esc(state.scanned)}」。UNIQLO、GU 吊牌上的條碼不一定等於商品編號，請改輸入吊牌上的 6 位數編號。</div>`;
+  return `<div class="notice">掃到的條碼是「${esc(state.scanned)}」。UNIQLO、GU 吊牌下方的條碼是店內代碼，不是商品編號；請改輸入條碼上方「341-486103」這類編號的後 6 位（例如 486103），或整串照打也可以。</div>`;
 }
 
 let lastResults = [];

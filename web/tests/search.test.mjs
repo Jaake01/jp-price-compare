@@ -144,3 +144,22 @@ test('EAN-8 條碼（7 位數貨號＋檢查碼）也找得到', () => {
   assert.equal(r.jump.matchedId, '8511747');
   assert.equal(search(idx2, '85117472').items.length, 0);
 });
+
+test('UNIQLO 吊牌「341-486103」照抄輸入也找得到', () => {
+  const idx3 = buildIndex({ UQ: { items: [{ brand: 'UQ', id: '486103', altIds: [], name: 'AIRism棉質條紋圓領T恤(長袖)', price: 590, salePrice: 490, maxPrice: 490, url: 'u', category: '', variants: [] }] } });
+  const r = search(idx3, '341-486103');
+  assert.equal(r.mode, 'exact');
+  assert.equal(r.jump.matchedId, '486103');
+  assert.equal(search(idx3, '341-999999').items.length, 0);
+});
+
+test('關鍵字：空白分開的詞都要出現（不限順序），簡體也找得到', () => {
+  const mk = (id, name, category = '') => ({ brand: 'UQ', id, altIds: [], name, price: 590, salePrice: null, maxPrice: 590, url: 'u', category, variants: [] });
+  const idx4 = buildIndex({ UQ: { items: [mk('486103', 'AIRism棉質條紋圓領T恤(長袖)'), mk('111111', '棉質短褲'), mk('222222', '長袖襯衫', '棉質')] } });
+  const names = (q) => search(idx4, q).items.map((i) => i.entry.rec.id);
+  assert.deepEqual(names('棉質 長袖'), ['486103', '222222']); // 品名都有 > 一個詞只在分類
+  assert.deepEqual(names('长袖 棉质'), ['486103', '222222']); // 簡體、順序相反
+  assert.deepEqual(names('棉质'), ['111111', '486103', '222222']); // 品名開頭 > 品名包含 > 分類
+  assert.deepEqual(names('棉質　短褲'), ['111111']); // 全形空白
+  assert.deepEqual(names('airism 长袖'), ['486103']);
+});
