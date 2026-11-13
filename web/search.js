@@ -1,10 +1,28 @@
 // 搜尋（SPEC「搜尋框」）。純函式，方便測試。
+import { T2S_PAIRS } from './t2s.js';
 
 const DASHES = /[\s\-‐‑‒–—―]/g;
 
 // 全形轉半形、轉小寫、去掉空白與連字號
 export function normalize(s) {
   return String(s || '').normalize('NFKC').toLowerCase().replace(DASHES, '');
+}
+
+// 關鍵字比對用：繁體字轉成簡體，讓「棉质」也能找到「棉質」
+let t2s = null;
+export function fold(s) {
+  if (!t2s) {
+    t2s = new Map();
+    for (let i = 0; i + 1 < T2S_PAIRS.length; i += 2) t2s.set(T2S_PAIRS[i], T2S_PAIRS[i + 1]);
+  }
+  let out = '';
+  for (const ch of normalize(s)) out += t2s.get(ch) || ch;
+  return out;
+}
+
+// 關鍵字以空白分成多個詞，每個詞都要出現（不限順序）
+function keywords(query) {
+  return String(query || '').normalize('NFKC').split(/[\s　]+/).map(fold).filter(Boolean);
 }
 
 export function isNumeric(q) {
@@ -20,7 +38,7 @@ export function buildIndex(datasets) {
   for (const [brand, data] of Object.entries(datasets)) {
     for (const rec of (data && data.items) || []) {
       const ids = new Set([rec.id, ...(rec.altIds || []), ...(rec.variants || []).flatMap((v) => v.ids || [])].map(normalize));
-      const e = { brand, rec, ids: [...ids], name: normalize(rec.name), cat: normalize(rec.category) };
+      const e = { brand, rec, ids: [...ids], name: fold(rec.name), cat: fold(rec.category) };
       entries.push(e);
       for (const id of ids) {
         if (!byId.has(id)) byId.set(id, []);
@@ -68,13 +86,14 @@ export function search(index, query, brand = 'ALL') {
     prefix.sort((a, b) => a.matchedId.length - b.matchedId.length || a.matchedId.localeCompare(b.matchedId));
     return { mode: 'prefix', q, items: prefix };
   }
+  // 相關度：全部詞都在品名且品名以第一個詞開頭 > 全部詞都在品名 > 有詞只出現在分類
+  const words = keywords(query);
   const ranked = [];
   for (const e of index.entries) {
     if (brand !== 'ALL' && e.brand !== brand) continue;
     let rank = -1;
-    if (e.name.startsWith(q)) rank = 0;
-    else if (e.name.includes(q)) rank = 1;
-    else if (e.cat.includes(q)) rank = 2;
+    if (words.every((w) => e.name.includes(w))) rank = e.name.startsWith(words[0]) ? 0 : 1;
+    else if (words.every((w) => e.name.includes(w) || e.cat.includes(w))) rank = 2;
     if (rank >= 0) ranked.push({ rank, entry: e });
   }
   ranked.sort((a, b) => a.rank - b.rank);
