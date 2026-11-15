@@ -176,6 +176,22 @@ test('服飾分類：從品名判斷，宜得利用官網分類', () => {
   assert.equal(c('羽絨背心'), '外套'); // 外套比背心（短袖）優先
   assert.equal(c('PP衣裝盒/橫式/深型/2入', 'MUJI'), '其他');
   assert.equal(c('纯棉婴儿用枕', 'NITORI', '臥室寢具'), '臥室寢具');
+  // 逐類檢查時找到的錯誤
+  assert.equal(c('男天竺圓領長袖T恤', 'MUJI'), '長袖'); // 「長袖」寫在「T恤」前面
+  assert.equal(c('WIC.T BACK LOGO短袖排T', 'MB'), '短袖');
+  assert.equal(c('COOL LIGHT T K\'S兒童短抽排T', 'MB'), '短袖');
+  assert.equal(c('STAINLESS STEEL SIERRA CUP 400杯', 'MB'), '其他'); // steel 裡的 tee
+  assert.equal(c('可替換刷頭的牙刷/白.柔軟刷毛', 'MUJI'), '其他');
+  assert.equal(c('刷毛帽'), '包・帽・配件');
+  assert.equal(c('兒童針織內褲', 'MUJI'), '內衣・內搭');
+  assert.equal(c('男起毛針織舒適打褶褲', 'MUJI'), '長褲');
+  assert.equal(c('坪林包種茶糖/120g', 'MUJI'), '其他');
+  assert.equal(c('相思木衣帽架', 'MUJI'), '其他');
+  assert.equal(c('品牌OLD SMITH純棉2WAY前後兩穿圍裙', 'NIKO'), '包・帽・配件');
+  assert.equal(c('AIRism棉質細肩帶背心'), '背心・無袖');
+  assert.equal(c('PUFFTECH 輕暖科技可機洗背心'), '外套');
+  assert.equal(c('女輕量羽絨可攜式附帽外套', 'MUJI'), '外套');
+  assert.equal(c('棉質無鋼圈美型胸罩(三角杯)'), '內衣・內搭');
   const mk = (id, name) => ({ brand: 'UQ', id, altIds: [], name, price: 590, salePrice: null, maxPrice: 590, url: 'u', category: '', variants: [] });
   const idx5 = buildIndex({ UQ: { items: [mk('1', '連帽外套'), mk('2', '圓領T恤(短袖)'), mk('3', '防風外套'), mk('4', '收納盒')] } });
   assert.deepEqual(categoryList(idx5, 'UQ'), [{ name: '外套', count: 2 }, { name: '短袖', count: 1 }, { name: '其他', count: 1 }]);
