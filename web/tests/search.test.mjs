@@ -163,3 +163,21 @@ test('關鍵字：空白分開的詞都要出現（不限順序），簡體也�
   assert.deepEqual(names('棉質　短褲'), ['111111']); // 全形空白
   assert.deepEqual(names('airism 长袖'), ['486103']);
 });
+
+import { categoryOf, categoryList, browse } from '../search.js';
+
+test('服飾分類：從品名判斷，宜得利用官網分類', () => {
+  const c = (name, brand = 'UQ', category = '') => categoryOf(brand, { name, category });
+  assert.equal(c('AIRism棉質條紋圓領T恤(長袖)'), '長袖');
+  assert.equal(c('Gordon Reid 圓領T恤(短袖)'), '短袖');
+  assert.equal(c('UL THERMAWRAP女款化纖JK', 'MB'), '外套');
+  assert.equal(c('男寬版直筒牛仔褲'), '長褲');
+  assert.equal(c('女燈芯絨短褲'), '短褲');
+  assert.equal(c('羽絨背心'), '外套'); // 外套比背心（短袖）優先
+  assert.equal(c('PP衣裝盒/橫式/深型/2入', 'MUJI'), '其他');
+  assert.equal(c('纯棉婴儿用枕', 'NITORI', '臥室寢具'), '臥室寢具');
+  const mk = (id, name) => ({ brand: 'UQ', id, altIds: [], name, price: 590, salePrice: null, maxPrice: 590, url: 'u', category: '', variants: [] });
+  const idx5 = buildIndex({ UQ: { items: [mk('1', '連帽外套'), mk('2', '圓領T恤(短袖)'), mk('3', '防風外套'), mk('4', '收納盒')] } });
+  assert.deepEqual(categoryList(idx5, 'UQ'), [{ name: '外套', count: 2 }, { name: '短袖', count: 1 }, { name: '其他', count: 1 }]);
+  assert.deepEqual(browse(idx5, 'UQ', '外套').items.map((i) => i.entry.rec.id), ['1', '3']);
+});

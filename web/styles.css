@@ -187,3 +187,10 @@ button, input { font-family: inherit; }
 .use-jp::after { content: ''; position: absolute; inset: -4px 0; } /* 觸控區至少 44px */
 .jp-note { margin: 0; font-size: 12px; color: var(--muted); line-height: 1.6; }
 .jp-note a { color: var(--accent); }
+.cat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.cat-chip { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-height: 56px; padding: 6px 4px; border-radius: 12px;
+  border: 1px solid var(--input-border); background: var(--card); color: var(--text); font-size: 14px; font-weight: 500; cursor: pointer; text-align: center; line-height: 1.3; }
+.cat-chip .n { font-size: 11px; color: var(--muted); font-weight: 400; }
+.cat-chip:active { border-color: var(--accent); }
+.browse-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.cat-back { min-height: 44px; padding: 0 12px 0 4px; border: 0; background: transparent; color: var(--accent); font-size: 15px; font-weight: 500; cursor: pointer; }

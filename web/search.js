@@ -25,6 +25,49 @@ function keywords(query) {
   return String(query || '').normalize('NFKC').split(/[\s　]+/).map(fold).filter(Boolean);
 }
 
+// 服飾分類：從品名判斷（各官網的分類不一致，GLOBAL WORK、niko、mont-bell 沒有分類）。
+// 由上往下比對，先比對較特定的分類。宜得利改用官網分類。
+const CATEGORY_RULES = [
+  ['洋裝', '洋裝|連身裙|連衣裙|連身褲|吊帶褲'],
+  ['外套', '外套|夾克|大衣|風衣|羽絨|派克|parka|blouson|防風|雨衣|雪衣|鋪棉|jk|jacket'],
+  ['針織・毛衣', '針織|毛衣|開襟|羊毛衫|喀什米爾'],
+  ['襯衫', '襯衫|罩衫|polo'],
+  ['家居服', '家居|睡衣|休閒服組|居家服|浴衣'],
+  ['內衣・內搭', '內衣|內褲|內搭|bra|胸罩|發熱衣|heattech|四角褲|三角褲|貼身|brief'],
+  ['襪子', '襪'],
+  ['短褲', '短褲|五分褲|七分褲'],
+  ['長褲', '褲'],
+  ['裙子', '裙'],
+  ['短袖', '短袖|無袖|背心|短t|tee|t恤(?!.*長袖)'],
+  ['長袖', '長袖|七分袖|八分袖|五分袖|長t|排t|衛衣|帽t|連帽|大學t|刷毛|套頭|pullover|上衣'],
+  ['包・帽・配件', '包|帽|圍巾|披巾|絲巾|方巾|手套|皮帶|腰帶|傘|領帶|頭巾|髮|口罩|鞋|靴|項鍊|頸鍊|手鏈|手鍊|戒指|耳環|眼鏡|吊飾|袋'],
+];
+// 畫面上的排列順序（和上面的比對順序不同）
+export const CATEGORY_ORDER = ['外套', '短袖', '長袖', '長褲', '短褲', '襯衫', '針織・毛衣', '裙子', '洋裝', '家居服', '內衣・內搭', '襪子', '包・帽・配件', '其他'];
+let categoryRules = null;
+
+export function categoryOf(brand, rec) {
+  if (brand === 'NITORI') return rec.category || '其他';
+  if (!categoryRules) categoryRules = CATEGORY_RULES.map(([c, rx]) => [c, new RegExp(fold(rx))]);
+  const name = fold(rec.name);
+  const hit = categoryRules.find(([, rx]) => rx.test(name));
+  return hit ? hit[0] : '其他';
+}
+
+// 某品牌的分類與件數。服飾依固定順序，宜得利依件數多寡
+export function categoryList(index, brand) {
+  const count = new Map();
+  for (const e of index.entries) if (e.brand === brand) count.set(e.kind, (count.get(e.kind) || 0) + 1);
+  const list = [...count].map(([name, n]) => ({ name, count: n }));
+  if (brand === 'NITORI') return list.sort((a, b) => (a.name === '其他') - (b.name === '其他') || b.count - a.count);
+  return list.sort((a, b) => CATEGORY_ORDER.indexOf(a.name) - CATEGORY_ORDER.indexOf(b.name));
+}
+
+export function browse(index, brand, kind) {
+  const items = index.entries.filter((e) => e.brand === brand && e.kind === kind).map((entry) => ({ entry, matchedId: null }));
+  return { mode: 'browse', q: '', items };
+}
+
 export function isNumeric(q) {
   return /^\d+$/.test(q);
 }
@@ -38,7 +81,7 @@ export function buildIndex(datasets) {
   for (const [brand, data] of Object.entries(datasets)) {
     for (const rec of (data && data.items) || []) {
       const ids = new Set([rec.id, ...(rec.altIds || []), ...(rec.variants || []).flatMap((v) => v.ids || [])].map(normalize));
-      const e = { brand, rec, ids: [...ids], name: fold(rec.name), cat: fold(rec.category) };
+      const e = { brand, rec, ids: [...ids], name: fold(rec.name), cat: fold(rec.category), kind: categoryOf(brand, rec) };
       entries.push(e);
       for (const id of ids) {
         if (!byId.has(id)) byId.set(id, []);
