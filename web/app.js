@@ -1,4 +1,4 @@
-import { buildIndex, search, defaultVariant, hasPriceSpread, nowPrice, priceSummary, normalize, applyFilters, filtersActive, DEFAULT_FILTERS, findJp, jpPriceFor } from './search.js';
+import { buildIndex, search, defaultVariant, hasPriceSpread, nowPrice, priceSummary, normalize, applyFilters, filtersActive, DEFAULT_FILTERS, findJp, jpPriceFor, categoryList, browse } from './search.js';
 import { calc, fmtTwd, parseJpy } from './calc.js';
 import { scanSupported, startScan } from './scanner.js';
 
@@ -19,6 +19,7 @@ const state = {
   loaded: false,
   query: '',
   brand: 'ALL',
+  cat: null,           // 點品牌後選的分類（搜尋框空白時）
   shown: PAGE,
   detail: null,        // { entry, matchedId, variant }
   jpyStr: '',
@@ -123,7 +124,10 @@ function render() {
   for (const b of document.querySelectorAll('.chip')) b.setAttribute('aria-pressed', String(b.dataset.brand === state.brand));
   if (inDetail) return renderDetail();
   const q = state.query.trim();
-  if (!normalize(q)) return renderHome();
+  if (!normalize(q)) {
+    if (state.brand !== 'ALL' && state.cat) return renderResults(browse(state.index, state.brand, state.cat));
+    return renderHome();
+  }
   const r = search(state.index, q, state.brand);
   if (!r.items.length) return renderEmpty(r);
   renderResults(r);
@@ -146,13 +150,15 @@ function renderHome() {
     </div>`;
   // 已在首頁時只更新資料狀態，避免打字到一半換算框被重畫
   const existing = $('#homeStatus');
-  if (existing) {
+  const homeKey = `${state.brand}:${state.index.entries.length}`; // 換品牌或資料載入後要重畫分類
+  if (existing && $('#home').dataset.key === homeKey) {
     existing.innerHTML = status;
     renderConv();
     return;
   }
   content.innerHTML = `
-    <div class="stack" id="home">
+    <div class="stack" id="home" data-key="${homeKey}">
+      ${categoriesHtml()}
       <div class="card">
         <h2><label for="convJpy">日幣換算</label></h2>
         <div class="jpy-box"><span class="yen">¥</span>
@@ -164,11 +170,31 @@ function renderHome() {
       <div class="card">
         <h2>怎麼查</h2>
         <p>輸入吊牌上的商品編號，會自動判斷品牌並直接打開那件商品。</p>
-        <p>也可以輸入關鍵字，例如「外套」，再點上方品牌縮小範圍。</p>
+        <p>也可以輸入關鍵字，例如「外套」，再點上方品牌縮小範圍；或直接點品牌，從分類找。</p>
       </div>
       <div id="homeStatus" class="stack-inner">${status}</div>
     </div>`;
   renderConv();
+}
+
+// 點品牌後的分類按鈕（全部品牌時不顯示）
+function categoriesHtml() {
+  if (state.brand === 'ALL') return '';
+  const cats = categoryList(state.index, state.brand);
+  if (!cats.length) return '';
+  return `<div class="card">
+      <h2>${LABEL[state.brand]}・分類</h2>
+      <div class="cat-grid">${cats.map((c) => `<button type="button" class="cat-chip" data-cat="${esc(c.name)}">
+        <span>${esc(c.name)}</span><span class="n">${c.count}</span></button>`).join('')}</div>
+    </div>`;
+}
+
+function openCategory(cat) {
+  state.cat = cat;
+  state.shown = PAGE;
+  history.pushState({ cat: true }, '');
+  render();
+  window.scrollTo(0, 0);
 }
 
 function taxChipsHtml() {
@@ -252,13 +278,15 @@ function filterBarHtml() {
 function renderResults(r) {
   stopMoreObserver();
   const q = state.query.trim();
-  const isText = r.mode === 'text';
+  const isText = r.mode === 'text' || r.mode === 'browse';
   // 編號查詢不套用篩選，避免查不到手上那件
   const items = isText ? applyFilters(r.items, state.filters) : r.items;
   lastResults = items;
   let header;
   if (r.mode === 'exact' && r.ambiguous) header = `<p class="result-header warn">這個編號在多個品牌都有，請點選你看到的那件</p>`;
   else if (!isText) header = `<p class="result-header">編號查詢・自動比對所有品牌・${r.items.length} 件</p>`;
+  else if (r.mode === 'browse') header = `<div class="browse-head"><button type="button" class="cat-back">‹ 全部分類</button>
+      <p class="result-header">${LABEL[state.brand]}・${esc(state.cat)}・${items.length} 件${filtersActive(state.filters) ? `（共 ${r.items.length} 件，已篩選）` : ''}</p></div>`;
   else header = `<p class="result-header">「${esc(q)}」・${state.brand === 'ALL' ? '全部品牌' : LABEL[state.brand]}・${items.length} 件${filtersActive(state.filters) ? `（共 ${r.items.length} 件，已篩選）` : ''}</p>`;
   if (isText) header = filterBarHtml() + header;
   if (!items.length) {
@@ -486,6 +514,7 @@ $('#chips').addEventListener('click', (e) => {
   const b = e.target.closest('.chip');
   if (!b) return;
   state.brand = b.dataset.brand;
+  state.cat = null;
   state.shown = PAGE;
   render();
 });
@@ -517,6 +546,13 @@ content.addEventListener('click', (e) => {
     $('#jpy').value = state.jpyStr;
     renderCalc();
     $('#calcOut').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    return;
+  }
+  const cat = e.target.closest('.cat-chip');
+  if (cat) return openCategory(cat.dataset.cat);
+  if (e.target.closest('.cat-back')) {
+    if (history.state && history.state.cat) history.back();
+    else { state.cat = null; render(); }
     return;
   }
   const aud = e.target.closest('.fchip[data-aud]');
@@ -554,7 +590,8 @@ content.addEventListener('input', (e) => {
 
 window.addEventListener('popstate', () => {
   if (scanning) return stopScan();
-  if (state.detail) closeDetail();
+  if (state.detail) return closeDetail();
+  if (state.cat) { state.cat = null; render(); }
 });
 
 // ---------- 掃描條碼 ----------
