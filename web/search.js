@@ -26,7 +26,7 @@ function keywords(query) {
 }
 
 // 服飾分類：從品名判斷（各官網的分類不一致，GLOBAL WORK、niko、mont-bell 沒有分類）。
-// 由上往下比對，先比對較特定的分類。宜得利改用官網分類。
+// 由上往下比對，先比對較特定的分類。只用在服飾品牌（宜得利不分類）。
 const CATEGORY_RULES = [
   // 先排除家居用品、明顯的配件（「包種茶糖」「衣帽架」「便當袋」「針織毛帽」「圍裙」不算衣服）
   ['其他', '睡袋|帳篷|沙發|架|收納|便當|靠枕|抱枕|枕|隨行杯|馬克杯|杯子|cup|鍋|碗|盤|筷|牙刷|椅|燈(?!芯|心)|零件|茶糖|茶包|咖啡|水壺|保溫|洗劑|清潔|補充|活頁|筆記本|衛生紙|面紙|洗衣|橡膠手套|檔案|速食|床包|鞋拔|美容|護髮|潤絲|洗髮|乳液|化妝|面膜|寵物|垃圾|高湯|床墊|冷凍|裝飾|擺飾|桌遊|玩具'],
@@ -34,41 +34,37 @@ const CATEGORY_RULES = [
   ['洋裝', '洋裝|連身裙|連衣裙|連身褲|吊帶褲'],
   ['外套', '外套|夾克|大衣|風衣|羽絨|派克|parka|blouson|防風|雨衣|雪衣|鋪棉|jk|jacket|(輕暖|刷毛|padded|保暖|搖粒絨).*背心'],
   ['內衣・內搭', '內衣|內褲|(?<!附)內搭|bra|胸罩|發熱衣|heattech|四角褲|三角褲|貼身|brief'],
-  ['襪子', '襪'],
-  ['家居服', '家居|睡衣|休閒服組|居家服|浴衣'],
+  ['包・帽・配件', '襪'],
   ['短褲', '短褲|五分褲|七分褲'],
   ['長褲', '褲'],
-  ['裙子', '裙(?!造型)'],
   ['背心・無袖', '背心|無袖|細肩帶|坦克'],
-  // 針織是布料：針織褲、針織背心已在上面分走，剩下的是毛衣、針織上衣
-  ['針織・毛衣', '針織|毛衣|開襟|羊毛衫|喀什米爾'],
-  ['襯衫', '襯衫|罩衫|polo'],
   // 品名寫明袖長的先判斷；七分袖以上算長袖、五分袖以下算短袖
   ['長袖', '長袖|七分袖|7分袖|八分袖|8分袖|九分袖|9分袖|長t|長抽|l/s'],
   ['短袖', '短袖|五分袖|5分袖|法式袖|短t|短排t|短抽'],
-  // 沒寫袖長：UNIQLO、GU、MUJI 的長袖 T 恤都會寫「長袖」，沒寫的 T 恤是短袖；休閒上衣、連帽上衣多為長袖
-  ['短袖', 't恤'],
-  ['長袖', '衛衣|帽t|連帽|大學t|套頭|套衫|pullover|上衣|排t'],
+  // 沒寫袖長：UNIQLO、GU、MUJI 的長袖 T 恤都會寫「長袖」，沒寫的 T 恤、POLO 衫是短袖；
+  // 襯衫、毛衣、針織衫、休閒上衣、連帽上衣多為長袖
+  ['短袖', 't恤|polo'],
+  ['長袖', '衛衣|帽t|連帽|大學t|套頭|套衫|pullover|上衣|排t|襯衫|罩衫|毛衣|針織|開襟|羊毛衫|喀什米爾'],
   ['包・帽・配件', '包(?!入|種|裝|覆)|圍巾|披巾|絲巾|方巾|皮帶|腰帶|傘|領帶|頭巾|髮圈|髮夾|髮帶|髮飾|髮梳|口罩|項鍊|頸鍊|手鏈|手鍊|戒指|耳環|眼鏡|吊飾|(?<!口|保鮮|夾鏈|垃圾)袋'],
 ];
 // 畫面上的排列順序（和上面的比對順序不同）
-export const CATEGORY_ORDER = ['外套', '短袖', '長袖', '長褲', '短褲', '襯衫', '針織・毛衣', '背心・無袖', '裙子', '洋裝', '家居服', '內衣・內搭', '襪子', '包・帽・配件', '其他'];
+export const CATEGORY_ORDER = ['外套', '短袖', '長袖', '長褲', '短褲', '背心・無袖', '洋裝', '內衣・內搭', '包・帽・配件', '其他'];
+export const APPAREL_BRANDS = ['UQ', 'GU', 'MUJI', 'GW', 'NIKO', 'MB'];
 let categoryRules = null;
 
 export function categoryOf(brand, rec) {
-  if (brand === 'NITORI') return rec.category || '其他';
   if (!categoryRules) categoryRules = CATEGORY_RULES.map(([c, rx]) => [c, new RegExp(fold(rx))]);
   const name = fold(rec.name);
   const hit = categoryRules.find(([, rx]) => rx.test(name));
   return hit ? hit[0] : '其他';
 }
 
-// 某品牌的分類與件數。服飾依固定順序，宜得利依件數多寡
+// 某品牌的分類與件數（依固定順序）。非服飾品牌沒有分類
 export function categoryList(index, brand) {
+  if (!APPAREL_BRANDS.includes(brand)) return [];
   const count = new Map();
   for (const e of index.entries) if (e.brand === brand) count.set(e.kind, (count.get(e.kind) || 0) + 1);
   const list = [...count].map(([name, n]) => ({ name, count: n }));
-  if (brand === 'NITORI') return list.sort((a, b) => (a.name === '其他') - (b.name === '其他') || b.count - a.count);
   return list.sort((a, b) => CATEGORY_ORDER.indexOf(a.name) - CATEGORY_ORDER.indexOf(b.name));
 }
 

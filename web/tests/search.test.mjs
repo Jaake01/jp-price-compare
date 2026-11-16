@@ -166,7 +166,7 @@ test('關鍵字：空白分開的詞都要出現（不限順序），簡體也�
 
 import { categoryOf, categoryList, browse } from '../search.js';
 
-test('服飾分類：從品名判斷，宜得利用官網分類', () => {
+test('服飾分類：從品名判斷，宜得利不分類', () => {
   const c = (name, brand = 'UQ', category = '') => categoryOf(brand, { name, category });
   assert.equal(c('AIRism棉質條紋圓領T恤(長袖)'), '長袖');
   assert.equal(c('Gordon Reid 圓領T恤(短袖)'), '短袖');
@@ -175,7 +175,6 @@ test('服飾分類：從品名判斷，宜得利用官網分類', () => {
   assert.equal(c('女燈芯絨短褲'), '短褲');
   assert.equal(c('羽絨背心'), '外套'); // 外套比背心（短袖）優先
   assert.equal(c('PP衣裝盒/橫式/深型/2入', 'MUJI'), '其他');
-  assert.equal(c('纯棉婴儿用枕', 'NITORI', '臥室寢具'), '臥室寢具');
   // 逐類檢查時找到的錯誤
   assert.equal(c('男天竺圓領長袖T恤', 'MUJI'), '長袖'); // 「長袖」寫在「T恤」前面
   assert.equal(c('WIC.T BACK LOGO短袖排T', 'MB'), '短袖');
@@ -184,10 +183,19 @@ test('服飾分類：從品名判斷，宜得利用官網分類', () => {
   assert.equal(c('可替換刷頭的牙刷/白.柔軟刷毛', 'MUJI'), '其他');
   assert.equal(c('刷毛帽'), '包・帽・配件');
   assert.equal(c('兒童針織內褲', 'MUJI'), '內衣・內搭');
+  assert.equal(c('男丹寧襯衫', 'MUJI'), '長袖'); // 襯衫、毛衣依袖長，沒寫算長袖
+  assert.equal(c('男馬杜拉斯格紋短袖襯衫', 'MUJI'), '短袖');
+  assert.equal(c('DRY網眼POLO衫'), '短袖');
+  assert.equal(c('美麗諾圓領毛衣(長袖)'), '長袖');
+  assert.equal(c('棉質多色家居服組(短袖)', 'GU'), '短袖');
+  assert.equal(c('男二重紗織家居長褲', 'MUJI'), '長褲');
+  assert.equal(c('運動腳踝襪'), '包・帽・配件');
+  assert.equal(c('百褶裙'), '其他');
   assert.equal(c('男起毛針織舒適打褶褲', 'MUJI'), '長褲');
   assert.equal(c('坪林包種茶糖/120g', 'MUJI'), '其他');
   assert.equal(c('相思木衣帽架', 'MUJI'), '其他');
   assert.equal(c('品牌OLD SMITH純棉2WAY前後兩穿圍裙', 'NIKO'), '包・帽・配件');
+  assert.deepEqual(categoryList(buildIndex({ NITORI: { items: [{ brand: 'NITORI', id: '1', altIds: [], name: '枕頭', price: 1, salePrice: null, maxPrice: 1, url: 'u', category: '臥室寢具', variants: [] }] } }), 'NITORI'), []);
   assert.equal(c('AIRism棉質細肩帶背心'), '背心・無袖');
   assert.equal(c('PUFFTECH 輕暖科技可機洗背心'), '外套');
   assert.equal(c('女輕量羽絨可攜式附帽外套', 'MUJI'), '外套');
