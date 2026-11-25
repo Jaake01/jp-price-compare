@@ -8,7 +8,7 @@ INDEX = """
 <h2 class="coupon-category">唐吉訶德和藥妝店免稅優惠券</h2>
 <div class="shop-logos">
   <a class="shop-item" id="tw-don-quijote" href="https://matcha-jp.com/tw/coupon/11?utm_source=matcha&amp;utm_medium=japan-coupon">
-    <img src="x.png" alt=""><span class="brand">唐吉訶德</span><br><span class="offer">最高17%折扣</span></a>
+    <img class="shop-item" src="https://resources.matcha-jp.com/coupon/330x2000/dq.png" alt=""><span class="brand">唐吉訶德</span><br><span class="offer">最高17%折扣</span></a>
 </div>
 <div class="shop-banner">
   <a id="tw-tomods" href="https://matcha-jp.com/tw/coupon/148?code=matcha&amp;utm_source=matcha"><img alt="Tomod's"></a>
@@ -17,6 +17,8 @@ INDEX = """
 <a class="hot-deal-card" href="https://matcha-jp.com/tw/19016?utm_source=matcha"><div>BicCamera 文章</div></a>
 <a class="shop-item" id="tw-bic-camera" href="https://matcha-jp.com/tw/17389?utm_source=matcha"><span class="brand">Bic Camera</span><br><span class="offer">最高17%折扣</span></a>
 <!-- a class="shop-item" id="tw-old" href="https://matcha-jp.com/tw/coupon/1"><span class="brand">舊券</span></a -->
+<h2 class="coupon-category">實體網卡 / eSIM網卡折扣優惠券</h2>
+<a class="shop-item" href="https://esim.matcha-jp.com/?code=matcha"><span class="brand">eSIM</span></a>
 <h2 class="coupon-category">東京免稅店折扣優惠券</h2>
 <a class="shop-item" id="tw-lotte" href="https://matcha-jp.com/tw/coupon/5"><span class="brand">樂天免稅</span><br><span class="offer">2千日圓折扣</span></a>
 """
@@ -31,6 +33,9 @@ COUPON = """
 <p>・點選<a href="https://japanportal.donki-global.com/coupon/?ptcd=1">此連結跳轉至優惠券頁面</a><br>
 ・結帳時請將優惠券畫面出示給收銀員</p>
 </p></div></div>
+<div class="logo-wrapper"><img class="lazyload logo-image" data-src="https://resources.matcha-jp.com/coupon/330x2000/logo.png"></div>
+<div class="type-image"><div class="type-image__wrapper"><a href="//resources.matcha-jp.com/coupon/720x2000/c.jpg">
+<img class="lazyload" data-src="//resources.matcha-jp.com/coupon/720x2000/c.jpg" alt=""></a></div></div>
 <p class="expiry-date">有效期限 2026-12-31 23:59:59</p>
 <div class="terms">
 <p>１．本優惠券僅適用於單次結帳未含稅10,000日圓以上，僅限使用一次。</p>
@@ -59,6 +64,8 @@ class IndexTest(unittest.TestCase):
         dq = es[0]
         self.assertEqual((dq["store"], dq["offer"], dq["category"]), ("唐吉訶德", "最高17%折扣", "藥妝雜貨"))
         self.assertEqual(dq["url"], "https://matcha-jp.com/tw/coupon/11")  # 去掉追蹤參數
+        self.assertEqual(dq["logo"], "https://resources.matcha-jp.com/coupon/330x2000/dq.png")
+        self.assertIsNone(es[1]["logo"])
         self.assertIsNone(es[1]["store"])  # 橫幅沒有店名，之後用券頁的
         self.assertEqual(es[1]["url"], "https://matcha-jp.com/tw/coupon/148")
         self.assertEqual(es[2]["category"], "電器行")
@@ -83,6 +90,8 @@ class PageTest(unittest.TestCase):
         self.assertEqual(len(p["terms"]), 3)
         self.assertIn("【折扣對象外商品】", p["terms"][1])
         self.assertEqual(p["couponLinks"], ["https://japanportal.donki-global.com/coupon/?ptcd=1"])
+        self.assertEqual(p["couponImage"], "https://resources.matcha-jp.com/coupon/720x2000/c.jpg")
+        self.assertEqual(p["logo"], "https://resources.matcha-jp.com/coupon/330x2000/logo.png")
 
     def test_missing_fields_are_unknown(self):
         p = c.parse_coupon_page(COUPON_NO_DATES)
@@ -91,6 +100,15 @@ class PageTest(unittest.TestCase):
             self.assertEqual(item[k], c.UNKNOWN, k)
         self.assertEqual(item["store"], "某店")
         self.assertEqual(p["terms"], ["1. 每次結帳僅限使用一張。", "2. 請於結帳時出示本優惠券。"])
+
+    def test_threshold_variants(self):
+        lines = ["店內商品單筆消費滿10,000日圓、未滿30,000日圓（未稅），再享3%折扣",
+                 "店内商品税抜1万円以上のお買い上げで3％OFF",
+                 "消費日幣1萬以上，享免稅 10% + 3%折扣",
+                 "・每次購物的最高折扣金額為 10,000 日圓",
+                 "AIRPORT TAXI ¥500折扣"]
+        got = c.threshold_from(lines).split("\n")
+        self.assertEqual(got, lines[:3])  # 折扣上限不是門檻
 
     def test_tax_free_threshold_counts(self):
         self.assertEqual(c.threshold_from(["9. 辦理免稅時，購買金額須達5,000日圓（未稅）以上。"]),
@@ -104,7 +122,8 @@ class PageTest(unittest.TestCase):
         self.assertTrue(item["threshold"].startswith("現在使用優惠券"))
         self.assertNotIn("\n", item["threshold"])  # 文章重複的說明只取一次
         self.assertEqual((item["validUntil"], item["usage"]), (c.UNKNOWN, c.UNKNOWN))  # 只在券圖裡，不推測
-        self.assertEqual(item["couponLink"], "https://resources.matcha-jp.com/original/2026/10/30-1.webp")
+        self.assertEqual(item["couponImage"], "https://resources.matcha-jp.com/original/2026/10/30-1.webp")
+        self.assertIsNone(item["couponLink"])
 
     def test_frame_blocked(self):
         def h(**kv):
@@ -136,7 +155,7 @@ class HealthAndScheduleTest(unittest.TestCase):
     def test_failed_run_keeps_previous(self):
         prev = {"updatedAt": "2026-08-01T00:00:00+00:00", "items": [item(1)], "count": 1}
         orig = c.fetch
-        c.fetch = lambda only=None: (_ for _ in ()).throw(RuntimeError("網站改版"))
+        c.fetch = lambda only=None: (_ for _ in ()).throw(RuntimeError("網站改版"))  # noqa
         try:
             out = c.run(prev)
         finally:
@@ -161,3 +180,23 @@ class HealthAndScheduleTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FetchTest(unittest.TestCase):
+    def test_redirected_coupon_is_dropped(self):
+        pages = {
+            "https://matcha-jp.com/tw/coupon/11": (COUPON, "https://matcha-jp.com/tw/coupon/11"),
+            "https://matcha-jp.com/tw/coupon/148": ("", "https://matcha-jp.com/tw/coupon"),  # 券已結束
+            "https://matcha-jp.com/tw/17389": (ARTICLE, "https://matcha-jp.com/tw/17389"),
+            "https://matcha-jp.com/tw/coupon/5": (COUPON, "https://matcha-jp.com/tw/coupon/5"),
+        }
+        orig = (c.http.request, c.http.request_full)
+        c.http.request = lambda url: INDEX.encode()
+        c.http.request_full = lambda url: (pages[url][0].encode(), Message(), pages[url][1])
+        try:
+            items, errors, removed = c.fetch()
+        finally:
+            c.http.request, c.http.request_full = orig
+        self.assertEqual([x["id"] for x in items], ["don-quijote", "bic-camera", "lotte"])
+        self.assertEqual(errors, [])
+        self.assertEqual(len(removed), 1)

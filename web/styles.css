@@ -212,15 +212,11 @@ body { padding-bottom: calc(60px + env(safe-area-inset-bottom)); }
 .c-reload:disabled { color: var(--muted); }
 .c-top .chip .n { font-size: 11px; opacity: 0.75; margin-left: 2px; }
 .c-top .chip:disabled { color: #A0A8B0; border-color: var(--divider); cursor: default; }
-.c-toolbar { display: flex; justify-content: flex-end; }
 .c-group { display: flex; flex-direction: column; gap: 12px; }
 .c-group-title { margin: 4px 2px 0; font-size: 16px; font-weight: 700; display: flex; align-items: baseline; gap: 8px; }
 .c-group-title .n { font-size: 12px; font-weight: 400; color: var(--muted); }
-.coupon { display: flex; flex-direction: column; gap: 8px; padding: 16px; background: var(--card); border: 1px solid var(--border); border-radius: 14px; }
-.coupon.expired { opacity: 0.6; }
-.c-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.c-store { margin: 0; font-size: 18px; font-weight: 700; }
-.c-cat { flex: none; padding: 2px 8px; border-radius: 4px; background: var(--input-bg); color: var(--text-2); font-size: 11px; font-weight: 500; }
+.c-store { margin: 0 0 4px; font-size: 20px; font-weight: 700; }
+.c-cat { display: inline-block; flex: none; padding: 2px 8px; border-radius: 4px; background: var(--input-bg); color: var(--text-2); font-size: 11px; font-weight: 500; }
 .c-discount { font-size: 22px; font-weight: 700; color: var(--accent); line-height: 1.3; }
 .c-title { margin: 0; font-size: 12px; color: var(--muted); line-height: 1.5; }
 .c-fields { display: grid; grid-template-columns: 4.5em 1fr; gap: 6px 10px; margin: 4px 0 0; padding-top: 10px; border-top: 1px solid var(--divider); font-size: 14px; line-height: 1.6; }
@@ -243,20 +239,7 @@ body { padding-bottom: calc(60px + env(safe-area-inset-bottom)); }
 .c-form { display: flex; flex-direction: column; gap: 10px; }
 .c-form label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
 .c-form input { height: 44px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--input-border); background: var(--input-bg); font-size: 16px; color: var(--text); }
-.c-quick-edit fieldset { margin: 0; padding: 0; border: 0; display: flex; flex-direction: column; }
-.c-quick-edit legend { padding: 8px 0 4px; font-size: 13px; font-weight: 700; color: var(--muted); }
-.c-check { display: flex; align-items: center; gap: 10px; min-height: 48px; border-bottom: 1px solid var(--divider); font-size: 15px; cursor: pointer; }
-.c-check input { width: 22px; height: 22px; accent-color: var(--accent); flex: none; }
-.c-check .d { margin-left: auto; font-size: 13px; color: var(--muted); text-align: right; }
-.quick-card { gap: 4px; }
-.quick-card h2 { margin: 0; }
-.quick-row { display: flex; align-items: center; gap: 8px; min-height: 48px; padding: 0 2px; border: 0; border-top: 1px solid var(--divider); background: transparent;
   color: var(--text); text-decoration: none; font-size: 15px; text-align: left; cursor: pointer; font-family: inherit; width: 100%; }
-.quick-row .s { font-weight: 700; }
-.quick-row .d { color: var(--accent); font-size: 13px; font-weight: 500; }
-.quick-row svg { margin-left: auto; color: var(--muted); flex: none; }
-.quick-row .warn { font-size: 12px; }
-.quick-row.gone { color: var(--muted); cursor: default; }
 
 /* App 內嵌原券頁 */
 .embed { position: fixed; inset: 0; z-index: 8; display: flex; flex-direction: column; background: var(--card); }
@@ -265,3 +248,45 @@ body { padding-bottom: calc(60px + env(safe-area-inset-bottom)); }
 .embed-hint { margin: 0; padding: 10px 16px; background: var(--warn-bg); color: var(--warn); font-size: 13px; line-height: 1.6; }
 .embed-frame { flex: 1; }
 .embed-frame iframe { width: 100%; height: 100%; border: 0; display: block; }
+
+/* 優惠券列表（品牌圖、店名、期限） */
+.c-chips { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin: 0 -16px; padding: 4px 16px; }
+.c-chips::-webkit-scrollbar { display: none; }
+.c-chips .chip { flex: none; }
+.c-list { display: flex; flex-direction: column; background: var(--card); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+.c-list-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: -4px 2px -8px; font-size: 13px; color: var(--muted); }
+.c-item { display: flex; align-items: center; gap: 4px; padding-right: 6px; }
+.c-item + .c-item { border-top: 1px solid var(--divider); }
+.c-item.expired .c-open { opacity: 0.55; }
+.c-open { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; min-height: 72px; padding: 10px 4px 10px 12px;
+  border: 0; background: transparent; color: var(--text); text-align: left; cursor: pointer; font-family: inherit; }
+.c-open:active { background: var(--input-bg); }
+.c-logo { position: relative; flex: none; width: 52px; height: 52px; border-radius: 12px; overflow: hidden; background: #FFFFFF;
+  border: 1px solid var(--divider); display: flex; align-items: center; justify-content: center; }
+.c-logo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; padding: 4px; background: #FFFFFF; }
+.c-logo .ph { font-size: 20px; font-weight: 700; color: var(--muted); }
+.c-logo.big { width: 72px; height: 72px; border-radius: 16px; }
+.c-logo.big .ph { font-size: 28px; }
+.c-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.c-name { font-size: 16px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.c-exp { font-size: 13px; }
+.muted { color: var(--muted); }
+.c-star { flex: none; width: 44px; height: 44px; border: 0; background: transparent; color: #B7BEC6; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+.c-star[aria-pressed="true"] { color: #D99A0B; }
+.c-sort { display: flex; flex: none; }
+.c-move { width: 44px; height: 44px; border: 0; background: transparent; color: var(--accent); cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.c-move:disabled { color: #C9CED4; cursor: default; }
+.c-item.gone .c-open { cursor: default; }
+.c-empty { align-items: flex-start; }
+
+/* 優惠券詳細頁 */
+.detail-top .spacer { flex: 1; }
+.c-detail { gap: 12px; }
+.c-hero { display: flex; align-items: center; gap: 14px; }
+.c-actions.col { flex-direction: column; align-items: stretch; }
+.c-actions.col .c-btn { gap: 6px; }
+.c-btn.big { min-height: 52px; border-radius: 26px; font-size: 16px; font-weight: 700; }
+.card .c-fields { margin: 0; padding-top: 0; border-top: 0; }
+.c-settings { display: block; }
+.c-settings[open] > summary { margin-bottom: 10px; }
+.c-settings > p { margin-bottom: 10px; }

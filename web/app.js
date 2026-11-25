@@ -1,7 +1,7 @@
 import { buildIndex, search, defaultVariant, hasPriceSpread, nowPrice, priceSummary, normalize, applyFilters, filtersActive, DEFAULT_FILTERS, findJp, jpPriceFor, categoryList, browse } from './search.js';
 import { calc, fmtTwd, parseJpy } from './calc.js';
 import { scanSupported, startScan } from './scanner.js';
-import { initCoupons, renderCouponsTab, quickCardHtml, closeEmbed, handleCouponClick, handleCouponChange, handleCouponSubmit } from './coupons-ui.js';
+import { initCoupons, renderCouponsTab, couponsBack, handleCouponClick, handleCouponSubmit } from './coupons-ui.js';
 
 const BRANDS = ['UQ', 'GU', 'MUJI', 'NITORI', 'GW', 'NIKO', 'MB'];
 const LABEL = { UQ: 'UNIQLO', GU: 'GU', MUJI: 'MUJI', NITORI: '宜得利', GW: 'GLOBAL WORK', NIKO: 'niko and ...', MB: 'mont-bell' };
@@ -158,13 +158,11 @@ function renderHome() {
   const homeKey = `${state.brand}:${state.index.entries.length}`; // 換品牌或資料載入後要重畫分類
   if (existing && $('#home').dataset.key === homeKey) {
     existing.innerHTML = status;
-    $('#homeQuick').innerHTML = quickCardHtml();
     renderConv();
     return;
   }
   content.innerHTML = `
     <div class="stack" id="home" data-key="${homeKey}">
-      <div id="homeQuick" class="stack-inner">${quickCardHtml()}</div>
       ${categoriesHtml()}
       <div class="card">
         <h2><label for="convJpy">日幣換算</label></h2>
@@ -539,7 +537,7 @@ $('#tabbar').addEventListener('click', (e) => {
 });
 
 content.addEventListener('click', (e) => {
-  if (handleCouponClick(e, { gotoCoupons: () => setTab('coupons') })) return;
+  if (state.tab === 'coupons' && handleCouponClick(e)) return;
   const item = e.target.closest('.item');
   if (item) {
     const hit = lastResults[Number(item.dataset.idx)];
@@ -589,7 +587,6 @@ content.addEventListener('click', (e) => {
 });
 
 content.addEventListener('change', (e) => {
-  if (handleCouponChange(e)) return;
   if (e.target.id === 'sort') updateFilters({ sort: e.target.value });
 });
 
@@ -612,7 +609,7 @@ content.addEventListener('input', (e) => {
 content.addEventListener('submit', (e) => { handleCouponSubmit(e); });
 
 window.addEventListener('popstate', () => {
-  if (closeEmbed()) return;
+  if (couponsBack()) return;
   if (scanning) return stopScan();
   if (state.detail) return closeDetail();
   if (state.cat) { state.cat = null; render(); }
@@ -667,10 +664,9 @@ $('#scanCancel').addEventListener('click', () => {
 
 // ---------- 啟動 ----------
 
-// 優惠券清單更新時：在優惠券分頁就重畫，在比價首頁只更新快選卡
+// 優惠券清單更新時：在優惠券分頁才重畫
 function onCouponsChange() {
   if (state.tab === 'coupons') render();
-  else if ($('#homeQuick')) $('#homeQuick').innerHTML = quickCardHtml();
 }
 
 (async function start() {

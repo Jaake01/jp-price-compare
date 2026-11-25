@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { known, expiryState, groupByCategory, categoryCounts, dataStatus, resolveQuick, toggleId, couponLinkLabel } from '../coupons-data.js';
+import { known, expiryState, groupByCategory, categoryCounts, dataStatus, resolveFavs, toggleId, moveId, showTarget } from '../coupons-data.js';
 
 const today = new Date(2026, 10, 25); // 2026/11/25
 
@@ -43,15 +43,18 @@ test('資料狀態：失敗、超過 90 天', () => {
   assert.equal(dataStatus(null, '', today).hasData, false);
 });
 
-test('主頁快選', () => {
-  const q = resolveQuick(['b', 'gone'], [{ id: 'a' }, { id: 'b' }]);
+test('最愛：順序、下架、排序', () => {
+  const q = resolveFavs(['b', 'gone'], [{ id: 'a' }, { id: 'b' }]);
   assert.deepEqual(q.map((x) => [x.id, !!x.item]), [['b', true], ['gone', false]]);
   assert.deepEqual(toggleId(['a'], 'b'), ['a', 'b']);
   assert.deepEqual(toggleId(['a', 'b'], 'a'), ['b']);
+  assert.deepEqual(moveId(['a', 'b', 'c'], 'c', -1), ['a', 'c', 'b']);
+  assert.deepEqual(moveId(['a', 'b', 'c'], 'a', -1), ['a', 'b', 'c']);
+  assert.deepEqual(moveId(['a', 'b', 'c'], 'a', 1), ['b', 'a', 'c']);
 });
 
-test('券畫面連結文字', () => {
-  assert.equal(couponLinkLabel('https://resources.matcha-jp.com/original/2026/10/30-1.webp'), '開啟券圖（條碼）');
-  assert.equal(couponLinkLabel('https://japanportal.donki-global.com/coupon/?ptcd=1'), '開啟店家券頁');
-  assert.equal(couponLinkLabel(null), null);
+test('出示券：店家券頁優先，其次券圖', () => {
+  assert.equal(showTarget({ couponLink: 'https://donki/x', couponImage: 'https://img/a.jpg' }).url, 'https://donki/x');
+  assert.match(showTarget({ couponLink: null, couponImage: 'https://img/a.webp' }).label, /券圖/);
+  assert.equal(showTarget({ couponLink: 'unknown', couponImage: null }), null);
 });

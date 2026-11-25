@@ -33,7 +33,7 @@ def request(url, *, data=None, headers=None, params=None, timeout=60):
 
 
 def request_full(url, *, data=None, headers=None, params=None, timeout=60):
-    """回傳 (bytes, 回應標頭)。需要看回應標頭時用（例如檢查能不能被內嵌）。"""
+    """回傳 (bytes, 回應標頭, 最後的網址)。需要看回應標頭或是否被轉址時用。"""
     if params:
         url += ("&" if "?" in url else "?") + urllib.parse.urlencode(params)
     hdrs = {"User-Agent": USER_AGENT, "Accept-Language": "zh-TW"}
@@ -48,7 +48,7 @@ def request_full(url, *, data=None, headers=None, params=None, timeout=60):
         req = urllib.request.Request(url, data=body, headers=hdrs)
         try:
             with urllib.request.urlopen(req, timeout=timeout) as resp:
-                return resp.read(), resp.headers
+                return resp.read(), resp.headers, resp.geturl()
         except (urllib.error.URLError, TimeoutError, ConnectionError) as e:
             last_err = e
             # 4xx（除了 429）重試也沒用

@@ -114,7 +114,8 @@ def parse_index(page_html):
             continue
         a_tag, inner = (m.group(2), m.group(3)) if m.group(2) else (m.group(4), m.group(5))
         href = _attr(a_tag, "href")
-        if not href or "matcha-jp.com" not in href:
+        # 只收 MATCHA 繁中站的券頁與文章（eSIM 等子網站的推廣連結不是券）
+        if not href or not re.match(r"(https:)?//matcha-jp\.com/tw/", href):
             continue
         url = clean_url(href)
         if url in seen:
@@ -127,6 +128,7 @@ def parse_index(page_html):
             "key": key,
             "store": _one_line(brand.group(1)) if brand else None,  # 橫幅沒有店名，用券頁的
             "offer": _one_line(offer.group(1)) if offer else None,
+            "logo": _img_src(inner) if not m.group(2) else None,  # 店家卡片的品牌圖（橫幅是宣傳圖，不用）
             "url": url,
             "section": section,
             "category": category_of(section),
@@ -136,12 +138,14 @@ def parse_index(page_html):
 
 # ---------- 券頁與文章頁 ----------
 
-_AMOUNT_RE = re.compile(r"[0-9０-９][0-9０-９,，]*\s*(?:日圓|日元|円|日幣)[^。！!]*?以上")
+_AMOUNT_RE = re.compile(r"[0-9０-９][0-9０-９,，]*\s*(?:萬|万)?\s*(?:日圓|日元|円|日幣)"
+                        r"|(?:日幣|日圓|[¥￥])\s*[0-9０-９][0-9０-９,，]*\s*(?:萬|万)?")
+_MIN_RE = re.compile(r"以上|滿|満|達")
 _EXCLUDE_RE = re.compile(r"對象外|不適用|除外|以外的商品|以上的商品")
 
 
 def threshold_from(lines):
-    """找出寫明「N 日圓…以上」的句子，照原文回傳（去掉開頭編號）。沒有就回傳 unknown。
+    """找出寫明金額門檻（N 日圓／円以上、滿 N 日圓）的句子，照原文回傳（去掉開頭編號）。沒有就回傳 unknown。
 
     免稅門檻（例如未稅滿 5,000 日圓）也算。寫「以上的商品不適用」這類排除條款不算。
     """
@@ -149,7 +153,7 @@ def threshold_from(lines):
     for line in lines:
         for sent in re.split(r"(?<=[。！!])", line):
             sent = re.sub(r"^\s*[0-9０-９]+\s*[.．、)）]\s*", "", sent).strip()
-            if sent and _AMOUNT_RE.search(sent) and not _EXCLUDE_RE.search(sent) and sent not in found:
+            if sent and _AMOUNT_RE.search(sent) and _MIN_RE.search(sent) and not _EXCLUDE_RE.search(sent) and sent not in found:
                 found.append(sent)
     return "\n".join(found) if found else UNKNOWN
 
@@ -157,6 +161,15 @@ def threshold_from(lines):
 def _expiry(text):
     m = re.search(r"(20\d{2})[-/.年]\s*(\d{1,2})[-/.月]\s*(\d{1,2})", text or "")
     return f"{m.group(1)}-{int(m.group(2)):02d}-{int(m.group(3)):02d}" if m else UNKNOWN
+
+
+def _img_src(fragment):
+    """片段裡第一張圖的網址（lazyload 的 data-src 優先）。只存網址，不下載。"""
+    m = re.search(r"<img\b[^>]*>", fragment or "")
+    if not m:
+        return None
+    src = _attr(m.group(0), "data-src") or _attr(m.group(0), "src")
+    return clean_url(src) if src else None
 
 
 def _coupon_links(fragment):
@@ -211,6 +224,8 @@ def parse_coupon_page(page_html):
         "threshold": threshold_from(terms + usage_lines),
         "terms": terms,
         "couponLinks": _coupon_links(desc),
+        "logo": _img_src(_block(t, "logo-wrapper")),
+        "couponImage": _img_src(_block(t, "type-image")),  # 券圖（有些有條碼可直接掃，有些只是宣傳圖）
     }
 
 
@@ -238,7 +253,9 @@ def parse_article_page(page_html):
         "validUntil": UNKNOWN,
         "threshold": first or UNKNOWN,
         "terms": [],
-        "couponLinks": links[:1],
+        "couponLinks": [],
+        "logo": None,
+        "couponImage": links[0] if links else None,  # Bic Camera：券本身就是這張圖（含條碼）
     }
 
 
@@ -269,7 +286,9 @@ def build_item(entry, page, fetched_at, embeddable):
         "usage": val(page.get("usage")),
         "validUntil": val(page.get("validUntil")),
         "url": entry["url"],
-        "couponLink": (page.get("couponLinks") or [None])[0],
+        "couponLink": (page.get("couponLinks") or [None])[0],  # 店家自己的券頁（例如唐吉訶德）
+        "couponImage": page.get("couponImage"),
+        "logo": entry.get("logo") or page.get("logo"),
         "terms": page.get("terms") or [],
         "fetchedAt": fetched_at,
         "embeddable": embeddable,
@@ -287,16 +306,20 @@ def fetch(only=None, today=None):
         missing = set(only) - {e["key"] for e in entries}
         if missing:
             raise RuntimeError(f"總覽頁找不到：{', '.join(sorted(missing))}")
-    items, errors = [], []
+    items, errors, removed = [], [], []
     for e in entries:
         try:
-            raw, headers = http.request_full(e["url"])
+            raw, headers, final = http.request_full(e["url"])
+            if clean_url(final).rstrip("/") != e["url"].rstrip("/"):
+                # 券已結束：MATCHA 把券頁轉回券列表，總覽頁卻還留著卡片 → 不列入
+                removed.append(f"{e['store'] or e['key']}（券頁已轉址，可能已結束）")
+                continue
             text = raw.decode("utf-8", "replace")
             page = parse_coupon_page(text) if "/coupon/" in e["url"] else parse_article_page(text)
             items.append(build_item(e, page, today, not frame_blocked(headers)))
         except Exception as ex:  # 單一券頁失敗：記錄，交給健康檢查判斷
             errors.append(f"{e['key']}：{ex}")
-    return items, errors
+    return items, errors, removed
 
 
 # ---------- 健康檢查、要不要更新 ----------
@@ -355,7 +378,7 @@ def run(prev, only=None):
     prev = prev or {}
     prev_items = prev.get("items") or []
     try:
-        items, errors = fetch(only)
+        items, errors, removed = fetch(only)
         problems = health_check(items, prev_items, errors, sample=bool(only))
     except Exception as ex:
         traceback.print_exc()
@@ -368,7 +391,7 @@ def run(prev, only=None):
     items.sort(key=lambda x: order.get(x["category"], 99))
     return {"source": "MATCHA", "sourceUrl": INDEX_URL, "updatedAt": _now(), "count": len(items),
             "lastRun": {"at": _now(), "ok": True, "error": None,
-                        "warnings": errors or None}, "items": items}
+                        "warnings": (errors + removed) or None}, "items": items}
 
 
 def main(argv=None):

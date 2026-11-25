@@ -58,8 +58,8 @@ export function dataStatus(data, fetchError, now = new Date()) {
   return { date, failed, reason, stale, hasData: !!(data && Array.isArray(data.items)) };
 }
 
-// 主頁快選：照勾選順序；清單裡已沒有的券標成已下架
-export function resolveQuick(ids, items) {
+// 最愛：照使用者排的順序；清單裡已沒有的券標成已下架
+export function resolveFavs(ids, items) {
   const byId = new Map((items || []).map((it) => [it.id, it]));
   return (ids || []).map((id) => ({ id, item: byId.get(id) || null }));
 }
@@ -68,8 +68,19 @@ export function toggleId(ids, id) {
   return ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id];
 }
 
-// 「開啟券畫面」按鈕的文字：券直接是圖片（例如 Bic Camera）或店家自己的券頁（例如唐吉訶德）
-export function couponLinkLabel(link) {
-  if (!link) return null;
-  return /\.(webp|png|jpe?g|gif)(\?|$)/i.test(link) ? '開啟券圖（條碼）' : '開啟店家券頁';
+// 最愛排序：往上（-1）或往下（+1）移一格
+export function moveId(ids, id, dir) {
+  const i = ids.indexOf(id);
+  const j = i + dir;
+  if (i < 0 || j < 0 || j >= ids.length) return ids;
+  const out = [...ids];
+  [out[i], out[j]] = [out[j], out[i]];
+  return out;
+}
+
+// 「出示券」要開什麼：店家自己的券頁（例如唐吉訶德，不能截圖使用）優先，其次是券圖（例如 Bic Camera、山田電機，圖上有條碼）
+export function showTarget(it) {
+  if (known(it.couponLink)) return { url: it.couponLink, label: '開啟店家券頁（給店員看）' };
+  if (known(it.couponImage)) return { url: it.couponImage, label: '開啟券圖（給店員掃）' };
+  return null;
 }
