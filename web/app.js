@@ -1,6 +1,7 @@
 import { buildIndex, search, defaultVariant, hasPriceSpread, nowPrice, priceSummary, normalize, applyFilters, filtersActive, DEFAULT_FILTERS, findJp, jpPriceFor, categoryList, browse } from './search.js';
 import { calc, fmtTwd, parseJpy } from './calc.js';
 import { scanSupported, startScan } from './scanner.js';
+import { initCoupons, renderCouponsTab, quickCardHtml, closeEmbed, handleCouponClick, handleCouponChange, handleCouponSubmit } from './coupons-ui.js';
 
 const BRANDS = ['UQ', 'GU', 'MUJI', 'NITORI', 'GW', 'NIKO', 'MB'];
 const LABEL = { UQ: 'UNIQLO', GU: 'GU', MUJI: 'MUJI', NITORI: '宜得利', GW: 'GLOBAL WORK', NIKO: 'niko and ...', MB: 'mont-bell' };
@@ -14,6 +15,7 @@ const STALE_MS = 3 * 24 * 60 * 60 * 1000; // 超過 3 天未更新 → 資料可
 const PAGE = 40;
 
 const state = {
+  tab: 'compare',      // compare（比價）／coupons（優惠券）
   data: {},            // UQ / GU / MUJI / FX
   index: buildIndex({}),
   loaded: false,
@@ -119,9 +121,12 @@ function imgHtml(rec, cls, svgSize) {
 function render() {
   stopMoreObserver();
   const inDetail = !!state.detail;
-  $('#searchBar').hidden = inDetail;
+  const inCoupons = state.tab === 'coupons';
+  $('#searchBar').hidden = inDetail || inCoupons;
   $('#clear').hidden = !state.query;
-  for (const b of document.querySelectorAll('.chip')) b.setAttribute('aria-pressed', String(b.dataset.brand === state.brand));
+  for (const b of document.querySelectorAll('#chips .chip')) b.setAttribute('aria-pressed', String(b.dataset.brand === state.brand));
+  for (const b of document.querySelectorAll('.tab')) b.setAttribute('aria-pressed', String(b.dataset.tab === state.tab));
+  if (inCoupons) return renderCouponsTab(content);
   if (inDetail) return renderDetail();
   const q = state.query.trim();
   if (!normalize(q)) {
@@ -153,11 +158,13 @@ function renderHome() {
   const homeKey = `${state.brand}:${state.index.entries.length}`; // 換品牌或資料載入後要重畫分類
   if (existing && $('#home').dataset.key === homeKey) {
     existing.innerHTML = status;
+    $('#homeQuick').innerHTML = quickCardHtml();
     renderConv();
     return;
   }
   content.innerHTML = `
     <div class="stack" id="home" data-key="${homeKey}">
+      <div id="homeQuick" class="stack-inner">${quickCardHtml()}</div>
       ${categoriesHtml()}
       <div class="card">
         <h2><label for="convJpy">日幣換算</label></h2>
@@ -519,7 +526,20 @@ $('#chips').addEventListener('click', (e) => {
   render();
 });
 
+function setTab(tab) {
+  if (state.tab === tab) return;
+  state.tab = tab;
+  render();
+  window.scrollTo(0, 0);
+}
+
+$('#tabbar').addEventListener('click', (e) => {
+  const b = e.target.closest('.tab');
+  if (b) setTab(b.dataset.tab);
+});
+
 content.addEventListener('click', (e) => {
+  if (handleCouponClick(e, { gotoCoupons: () => setTab('coupons') })) return;
   const item = e.target.closest('.item');
   if (item) {
     const hit = lastResults[Number(item.dataset.idx)];
@@ -569,6 +589,7 @@ content.addEventListener('click', (e) => {
 });
 
 content.addEventListener('change', (e) => {
+  if (handleCouponChange(e)) return;
   if (e.target.id === 'sort') updateFilters({ sort: e.target.value });
 });
 
@@ -588,7 +609,10 @@ content.addEventListener('input', (e) => {
   }
 });
 
+content.addEventListener('submit', (e) => { handleCouponSubmit(e); });
+
 window.addEventListener('popstate', () => {
+  if (closeEmbed()) return;
   if (scanning) return stopScan();
   if (state.detail) return closeDetail();
   if (state.cat) { state.cat = null; render(); }
@@ -643,8 +667,15 @@ $('#scanCancel').addEventListener('click', () => {
 
 // ---------- 啟動 ----------
 
+// 優惠券清單更新時：在優惠券分頁就重畫，在比價首頁只更新快選卡
+function onCouponsChange() {
+  if (state.tab === 'coupons') render();
+  else if ($('#homeQuick')) $('#homeQuick').innerHTML = quickCardHtml();
+}
+
 (async function start() {
   render();
+  initCoupons(onCouponsChange);
   await readCache();
   rebuild();
   state.loaded = BRANDS.some((b) => state.data[b]);
