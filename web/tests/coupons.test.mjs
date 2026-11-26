@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { known, expiryState, groupByCategory, categoryCounts, dataStatus, resolveFavs, toggleId, moveId, showTarget } from '../coupons-data.js';
+import { known, expiryState, groupByCategory, categoryCounts, dataStatus, resolveFavs, toggleId, moveId, showTarget, groupCoupons, bestExpiry } from '../coupons-data.js';
 
 const today = new Date(2026, 10, 25); // 2026/11/25
 
@@ -57,4 +57,20 @@ test('出示券：店家券頁優先，其次券圖', () => {
   assert.equal(showTarget({ couponLink: 'https://donki/x', couponImage: 'https://img/a.jpg' }).url, 'https://donki/x');
   assert.match(showTarget({ couponLink: null, couponImage: 'https://img/a.webp' }).label, /券圖/);
   assert.equal(showTarget({ couponLink: 'unknown', couponImage: null }), null);
+});
+
+test('同一家店合併：MATCHA 為主、最晚期限、無期限', () => {
+  const items = [
+    { id: 'bic-camera', group: 'bic-camera', store: 'Bic Camera', category: '電器行', validUntil: 'unknown', logo: 'm.png', source: 'matcha' },
+    { id: 'ct-bic', group: 'bic-camera', store: 'BIC CAMERA+SALONIA', category: '電器行', validUntil: '2027-04-30', logo: 'c.png', source: 'chictrip' },
+    { id: 'ct-x', store: '大國藥妝', category: '藥妝雜貨', validUntil: 'none', logo: null, source: 'chictrip' },
+  ];
+  const g = groupCoupons(items);
+  assert.equal(g.length, 2);
+  assert.equal(g[0].store, 'Bic Camera');
+  assert.equal(g[0].validUntil, '2027-04-30');
+  assert.deepEqual(g[0].items.map((x) => x.id), ['bic-camera', 'ct-bic']);
+  assert.equal(g[1].validUntil, 'none');
+  assert.equal(expiryState('none', today).state, 'none');
+  assert.equal(bestExpiry([{ validUntil: 'unknown' }]), 'unknown');
 });
