@@ -12,6 +12,9 @@ on:
         description: "不管日期，直接重新抓"
         type: boolean
         default: false
+      ref:
+        description: "爬蟲程式用 jp-price-compare 的哪個分支"
+        default: "main"
 
 permissions:
   contents: write
@@ -29,6 +32,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: Jaake01/jp-price-compare
+          ref: ${{ inputs.ref || 'main' }}
           path: app
       - uses: actions/setup-python@v5
         with:
