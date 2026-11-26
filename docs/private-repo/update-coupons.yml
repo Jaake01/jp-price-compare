@@ -66,6 +66,7 @@ jobs:
           node-version: "22"
       - name: 讀券圖（只讀新圖；沒設定權杖就跳過）
         if: env.HAS_CLAUDE == 'true' && hashFiles('coupons.json') != ''
+        continue-on-error: true  # 讀圖失敗不影響存檔，下週再讀
         env:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           VISION_MODEL: ${{ vars.VISION_MODEL }}
@@ -74,6 +75,7 @@ jobs:
           cd app && python -m crawler.coupon_vision --data ../coupons.json --cache ../vision_cache.json
 
       - name: 存檔
+        if: always() && steps.check.outcome == 'success'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
