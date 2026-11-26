@@ -16,8 +16,9 @@ export function ymd(d) {
 
 export const slashDate = (s) => (s ? String(s).slice(0, 10).replace(/-/g, '/') : '');
 
-// 有效期限狀態：unknown／expired／soon（14 天內）／ok；days = 還剩幾天（含當天）
+// 有效期限狀態：unknown／none（無期限）／expired／soon（14 天內）／ok；days = 還剩幾天（含當天）
 export function expiryState(validUntil, today = new Date()) {
+  if (validUntil === 'none') return { state: 'none', days: null };
   const v = known(validUntil);
   if (!v || !/^\d{4}-\d{2}-\d{2}$/.test(v)) return { state: 'unknown', days: null };
   const t = ymd(today);
@@ -84,3 +85,35 @@ export function showTarget(it) {
   if (known(it.couponImage)) return { url: it.couponImage, label: '開啟券圖（給店員掃）' };
   return null;
 }
+
+// 同一家店（不同網站的券）合併成一組：列表一列，詳細頁列出每張券
+// 每組的欄位和單張券相同（id、store、category、validUntil、logo），另有 items
+export function groupCoupons(items) {
+  const map = new Map();
+  for (const it of items || []) {
+    const key = it.group || it.id;
+    if (!map.has(key)) map.set(key, []);
+    map.get(key).push(it);
+  }
+  return [...map.entries()].map(([id, list]) => {
+    const lead = list.find((x) => x.id === id) || list[0];
+    const sorted = [lead, ...list.filter((x) => x !== lead)];
+    return {
+      id,
+      store: lead.store,
+      category: lead.category,
+      validUntil: bestExpiry(list),
+      logo: (sorted.find((x) => known(x.logo)) || {}).logo || null,
+      items: sorted,
+    };
+  });
+}
+
+// 一組裡最晚的有效期限（有無期限的券就算無期限；全部未確認就是未確認）
+export function bestExpiry(list) {
+  if (list.some((x) => x.validUntil === 'none')) return 'none';
+  const dates = list.map((x) => known(x.validUntil)).filter((v) => /^\d{4}-\d{2}-\d{2}$/.test(v || '')).sort();
+  return dates.length ? dates[dates.length - 1] : 'unknown';
+}
+
+export const SOURCE_LABEL = { matcha: 'MATCHA', chictrip: '去趣 chicTrip' };

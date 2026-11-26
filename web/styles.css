@@ -290,3 +290,18 @@ body { padding-bottom: calc(60px + env(safe-area-inset-bottom)); }
 .c-settings { display: block; }
 .c-settings[open] > summary { margin-bottom: 10px; }
 .c-settings > p { margin-bottom: 10px; }
+
+/* 同一家店多張券、來源、券圖判讀 */
+.c-count { margin-left: 8px; padding: 1px 6px; border-radius: 4px; background: var(--accent-bg); color: var(--accent); font-size: 11px; font-weight: 500; }
+.c-hero .c-count { display: inline-block; margin: 0 0 0 6px; }
+.c-coupon { gap: 10px; }
+.c-coupon .c-discount { font-size: 20px; }
+.c-src { padding: 2px 8px; border-radius: 4px; background: #15191E; color: #FFFFFF; font-size: 11px; font-weight: 700; letter-spacing: 0.3px; flex: none; }
+.c-sub { font-size: 12px; text-align: right; }
+.c-coupon .c-fields { margin: 0; padding-top: 10px; border-top: 1px solid var(--divider); }
+.c-vision { display: flex; flex-direction: column; gap: 6px; padding: 12px; border-radius: 10px; background: var(--accent-bg); }
+.c-vision .c-fields { padding-top: 0; border-top: 0; }
+.c-vision-head { margin: 0; font-size: 14px; font-weight: 700; color: var(--accent); display: flex; flex-direction: column; gap: 2px; }
+.c-vision-head span { font-size: 11px; font-weight: 400; color: var(--muted); }
+.c-tiers { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.c-terms-head { margin: 0 0 4px; font-size: 13px; font-weight: 700; color: var(--text-2); }

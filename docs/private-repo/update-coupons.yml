@@ -1,6 +1,7 @@
 # 優惠券清單自動更新（放在私人 repo，資料不公開）
-# 每週檢查一次：滿 90 天、有券在上次抓取後過期、或上次失敗，才真的去 MATCHA 抓。
-# 爬蟲程式在公開 repo jp-price-compare（crawler/coupons.py），這裡只存結果 coupons.json。
+# 每週檢查一次：滿 90 天、有券在上次抓取後過期、或上次失敗，才真的去 MATCHA、去趣 chicTrip 抓。
+# 有設定 CLAUDE_CODE_OAUTH_TOKEN 時，每週也把還沒讀過的券圖交給 Claude 判讀（讀過的不重讀，結果存 vision_cache.json）。
+# 爬蟲程式在公開 repo jp-price-compare（crawler/），這裡只存結果。
 name: 更新優惠券
 
 on:
@@ -26,7 +27,9 @@ concurrency:
 jobs:
   update:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 40
+    env:
+      HAS_CLAUDE: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN != '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/checkout@v4
@@ -57,12 +60,25 @@ jobs:
             echo "ok=no" >> "$GITHUB_OUTPUT"
           fi
 
+      - uses: actions/setup-node@v4
+        if: env.HAS_CLAUDE == 'true'
+        with:
+          node-version: "22"
+      - name: 讀券圖（只讀新圖；沒設定權杖就跳過）
+        if: env.HAS_CLAUDE == 'true' && hashFiles('coupons.json') != ''
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          VISION_MODEL: ${{ vars.VISION_MODEL }}
+        run: |
+          npm install -g @anthropic-ai/claude-code
+          cd app && python -m crawler.coupon_vision --data ../coupons.json --cache ../vision_cache.json
+
       - name: 存檔
-        if: steps.check.outputs.need == 'yes'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add coupons.json
+          [ -f vision_cache.json ] && git add vision_cache.json
           git diff --cached --quiet || git commit -q -m "優惠券更新 $(date -u +%Y-%m-%d)"
           git push
 

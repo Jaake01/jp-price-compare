@@ -2,7 +2,7 @@
 // 券圖與條碼不下載，一律開原圖網址、店家券頁或 MATCHA 原頁，所以要有網路才打得開。
 import {
   CATEGORIES, known, slashDate, expiryState, groupByCategory, categoryCounts, dataStatus,
-  resolveFavs, toggleId, moveId, showTarget,
+  resolveFavs, toggleId, moveId, showTarget, groupCoupons, SOURCE_LABEL,
 } from './coupons-data.js';
 
 const DATA_CACHE = 'data-v1';
@@ -34,8 +34,14 @@ function lsSet(key, val) {
 }
 const source = () => lsGet(LS_SOURCE, null);
 const favIds = () => lsGet(LS_FAVS, []);
-const items = () => (st.data && st.data.items) || [];
+// 列表與最愛以「店」為單位：同一家店在不同網站的券合併成一組
+let groupsCache = { data: null, groups: [] };
+function items() {
+  if (groupsCache.data !== st.data) groupsCache = { data: st.data, groups: groupCoupons((st.data && st.data.items) || []) };
+  return groupsCache.groups;
+}
 const byId = (id) => items().find((x) => x.id === id);
+const couponById = (id) => ((st.data && st.data.items) || []).find((x) => x.id === id);
 
 // ---------- 資料 ----------
 
@@ -109,6 +115,7 @@ function logoHtml(it, cls = 'c-logo') {
 
 function expiryHtml(it, short = false) {
   const e = expiryState(it.validUntil);
+  if (e.state === 'none') return short ? '<span class="muted">無期限</span>' : '無期限';
   if (e.state === 'unknown') return short ? '<span class="muted">期限未確認</span>' : unk;
   const d = slashDate(it.validUntil);
   if (e.state === 'expired') return `<span class="warn">${d}・已過期${short ? '' : '（等待下次更新）'}</span>`;
@@ -129,7 +136,8 @@ function rowHtml(it, favs, sortCtl = '') {
   return `<div class="c-item${ex ? ' expired' : ''}">
     <button type="button" class="c-open" data-detail="${esc(it.id)}">
       ${logoHtml(it)}
-      <span class="c-text"><span class="c-name">${esc(known(it.store) || it.id)}</span><span class="c-exp">${expiryHtml(it, true)}</span></span>
+      <span class="c-text"><span class="c-name">${esc(known(it.store) || it.id)}</span>
+        <span class="c-exp">${expiryHtml(it, true)}${it.items && it.items.length > 1 ? `<span class="c-count">${it.items.length} 張券</span>` : ''}</span></span>
     </button>
     ${sortCtl || starHtml(it, favs)}
   </div>`;
@@ -193,42 +201,65 @@ function listHtml(favs) {
     <div class="c-list">${g.items.map((it) => rowHtml(it, favs)).join('')}</div></section>`).join('');
 }
 
-function detailHtml(it, favs) {
+// 券圖判讀（由 Claude 看券圖整理，可能有誤）
+function imageInfoHtml(info) {
+  if (!info) return '';
+  const tiers = (info.tiers || []).map((t) => `<li><b>${esc(t.discount || '')}</b>${t.condition ? `・${esc(t.condition)}` : ''}${t.items ? `<br><span class="muted">${esc(t.items)}</span>` : ''}</li>`).join('');
+  const rows = [
+    tiers ? `<dt>折扣方式</dt><dd><ul class="c-tiers">${tiers}</ul></dd>` : '',
+    info.excludes ? `<dt>不適用</dt><dd>${esc(info.excludes)}</dd>` : '',
+    info.notes ? `<dt>其他規則</dt><dd>${esc(info.notes)}</dd>` : '',
+  ].join('');
+  if (!rows) return '';
+  return `<div class="c-vision"><p class="c-vision-head">券圖重點<span>由 Claude 讀券圖整理，可能有誤，以券圖為準</span></p><dl class="c-fields">${rows}</dl></div>`;
+}
+
+function couponBlock(it) {
   const show = showTarget(it);
-  const terms = (it.terms || []).length
-    ? `<details class="c-terms"><summary>使用條件原文（${it.terms.length} 條）</summary>
-        <ul>${it.terms.map((t) => `<li>${esc(t)}</li>`).join('')}</ul></details>` : '';
+  const info = it.imageInfo || null;
+  // 網頁沒寫期限、券圖上有寫：用券圖的，並標示來源
+  const exp = known(it.validUntil) || !info || !info.validUntil ? expiryHtml(it)
+    : `${esc(slashDate(info.validUntil))} <span class="muted">（券圖上的期限）</span>`;
+  const terms = (it.terms || []).length ? `<div class="c-terms"><p class="c-terms-head">使用條件原文</p>
+      <ul>${it.terms.map((t) => `<li>${esc(t)}</li>`).join('')}</ul></div>` : '';
   const site = it.embeddable
     ? `<button type="button" class="c-btn" data-embed="${esc(it.id)}">在 App 內開啟網站</button>
        <a class="c-btn" href="${esc(it.url)}" target="_blank" rel="noopener">在瀏覽器開啟網站 ${EXT_ICON}</a>`
-    : `<a class="c-btn" href="${esc(it.url)}" target="_blank" rel="noopener">開啟網站（MATCHA 原券頁） ${EXT_ICON}</a>`;
+    : `<a class="c-btn" href="${esc(it.url)}" target="_blank" rel="noopener">開啟網站（${esc(SOURCE_LABEL[it.source] || 'MATCHA')}） ${EXT_ICON}</a>`;
+  return `<section class="card c-coupon">
+    <div class="c-row"><span class="c-src">${esc(SOURCE_LABEL[it.source] || 'MATCHA')}</span>${it.store !== undefined ? `<span class="muted c-sub">${esc(known(it.store) || '')}</span>` : ''}</div>
+    <div class="c-discount">${known(it.discount) ? esc(it.discount) : '折扣未確認'}</div>
+    ${known(it.title) ? `<p class="c-title">${esc(it.title)}</p>` : ''}
+    <div class="c-actions col">
+      ${show ? `<a class="c-btn primary big" href="${esc(show.url)}" target="_blank" rel="noopener">${show.label} ${EXT_ICON}</a>`
+        : '<p class="c-title">這張券沒有可以直接出示的券圖，請開啟網站出示。</p>'}
+      ${site}
+    </div>
+    <dl class="c-fields">
+      <dt>有效期限</dt><dd>${exp}</dd>
+      <dt>門檻</dt><dd>${known(it.threshold) ? multiline(it.threshold) : unk}</dd>
+      <dt>使用方式</dt><dd>${known(it.usage) ? multiline(it.usage) : unk}</dd>
+    </dl>
+    ${imageInfoHtml(info)}
+    ${terms}
+    <p class="c-foot">抓取日期 ${esc(slashDate(it.fetchedAt))}・券圖與條碼不存在 App 裡，需要網路才打得開。</p>
+  </section>`;
+}
+
+function detailHtml(g, favs) {
   return `
     <div class="detail-top">
       <button type="button" class="icon-btn" data-detail-back aria-label="返回優惠券列表">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#15191E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
       </button>
       <span>優惠券</span>
-      <span class="spacer"></span>${starHtml(it, favs)}
+      <span class="spacer"></span>${starHtml(g, favs)}
     </div>
     <div class="detail c-detail">
-      <div class="c-hero">${logoHtml(it, 'c-logo big')}
-        <div><h2 class="c-store">${esc(known(it.store) || '店名未確認')}</h2><span class="c-cat">${esc(it.category)}</span></div></div>
-      <div class="c-discount">${known(it.discount) ? esc(it.discount) : '折扣未確認'}</div>
-      ${known(it.title) ? `<p class="c-title">${esc(it.title)}</p>` : ''}
-      <div class="c-actions col">
-        ${show ? `<a class="c-btn primary big" href="${esc(show.url)}" target="_blank" rel="noopener">${show.label} ${EXT_ICON}</a>`
-          : '<p class="c-title">這張券沒有可以直接出示的券圖，請開啟網站出示。</p>'}
-        ${site}
-      </div>
-      <div class="card">
-        <dl class="c-fields">
-          <dt>有效期限</dt><dd>${expiryHtml(it)}</dd>
-          <dt>門檻</dt><dd>${known(it.threshold) ? multiline(it.threshold) : unk}</dd>
-          <dt>使用方式</dt><dd>${known(it.usage) ? multiline(it.usage) : unk}</dd>
-        </dl>
-        ${terms}
-      </div>
-      <p class="c-foot">抓取日期 ${esc(slashDate(it.fetchedAt))}・來源 MATCHA。券圖與條碼不存在 App 裡，需要網路才打得開。</p>
+      <div class="c-hero">${logoHtml(g, 'c-logo big')}
+        <div><h2 class="c-store">${esc(known(g.store) || '店名未確認')}</h2><span class="c-cat">${esc(g.category)}</span>
+        ${g.items.length > 1 ? `<span class="c-count">${g.items.length} 張券，來自不同網站</span>` : ''}</div></div>
+      ${g.items.map(couponBlock).join('')}
     </div>`;
 }
 
@@ -269,7 +300,7 @@ export function renderCouponsTab(container) {
 
 let embedTimer = null;
 function openEmbed(id) {
-  const it = byId(id);
+  const it = couponById(id);
   if (!it) return;
   st.embed = it;
   $('#embedTitle').textContent = known(it.store) || '優惠券';

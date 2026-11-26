@@ -20,7 +20,7 @@ import sys
 import traceback
 from datetime import date, datetime, timedelta, timezone
 
-from . import http
+from . import chictrip, http
 
 INDEX_URL = "https://matcha-jp.com/tw/japan-coupon"
 UNKNOWN = "unknown"
@@ -107,7 +107,7 @@ def parse_index(page_html):
         r'|<div[^>]*class="[^"]*shop-banner[^"]*"[^>]*>\s*(<a\b[^>]*>)(.*?)</a>'
         r'|(<a\b[^>]*class="[^"]*shop-item[^"]*"[^>]*>)(.*?)</a>',
         t, flags=re.S)
-    section, out, seen = None, [], set()
+    section, out, seen, keys = None, [], set(), set()
     for m in tokens:
         if m.group(1) is not None:
             section = _one_line(m.group(1))
@@ -122,6 +122,9 @@ def parse_index(page_html):
             continue
         seen.add(url)
         key = (_attr(a_tag, "id") or "").removeprefix("tw-") or re.sub(r"\W+", "-", url.split("matcha-jp.com/")[-1])
+        if key in keys:  # 同一個 id 用在好幾張券（例如各地區的鶴羽藥妝）：加上券號區分
+            key = f"{key}-{url.rstrip('/').split('/')[-1]}"
+        keys.add(key)
         brand = re.search(r'<span class="brand">(.*?)</span>', inner, flags=re.S)
         offer = re.search(r'<span class="offer">(.*?)</span>', inner, flags=re.S)
         out.append({
@@ -277,6 +280,7 @@ def build_item(entry, page, fetched_at, embeddable):
         return x if x else UNKNOWN
     return {
         "id": entry["key"],
+        "source": "matcha",
         "store": val(entry.get("store") or page.get("brand")),
         "category": entry["category"],
         "section": entry.get("section") or UNKNOWN,
@@ -356,7 +360,7 @@ def needs_update(data, today=None):
     # （抓完原頁還是舊期限的，期限早於上次抓取，不會每週重抓）
     for x in data.get("items", []):
         v = x.get("validUntil")
-        if v and v != UNKNOWN and last.isoformat() <= v < today.isoformat():
+        if v and re.match(r"\d{4}-", v) and last.isoformat() <= v < today.isoformat():
             return True, f"{x['store']} 的券已在 {v} 過期"
     return False, "不需要更新"
 
@@ -373,25 +377,111 @@ def _load(path):
         return None
 
 
+# ---------- 同一家店合併（App 列表一列，詳細頁列出各來源的券） ----------
+
+# 店名正規化後仍對不上的，手動指定同一家店（左：正規化後的名字，右：合併用的鍵）
+ALIASES = {
+    "biccamera+salonia": "biccamera",
+    "國民藥妝": "國民",
+    "sundrug": "尚都樂客",
+    "樂購仕": "laox",
+    "杏林堂": "杏林堂藥妝",
+    "lady藥妝": "lady藥局",
+    "takeya多慶屋": "多慶屋",
+    "松阪屋百貨": "大丸松坂屋",
+    "大丸・松阪屋百貨": "大丸松坂屋",
+    "大丸松阪屋百貨": "大丸松坂屋",
+    "tobu東武百貨": "東武百貨店",
+    "東武百貨": "東武百貨店",
+    "京王百貨店新宿店": "京王百貨店",
+    "edion愛電王": "edion愛電王",
+    "victoria運動用品": "victoria",
+    "樂天免稅店銀座": "樂天免稅銀座店",
+    "nipponrent-a-car": "日本租車",
+}
+_GENERIC = {"藥妝", "藥局", "百貨", "百貨店", "免稅店", "運動用品"}
+
+
+def brand_key(name):
+    """店名 → 合併用的鍵。去掉「日本」、括號、空白與符號；中英並列時取中文（例：YAMADA 山田電機 → 山田電機）。"""
+    n = re.sub(r"[（(【].*?[）)】]", "", name or "")
+    n = re.sub(r"^日本\s*", "", n.strip())
+    n = re.sub(r"[\s・･·]+", "", n).lower()
+    if n in ALIASES:
+        return ALIASES[n]
+    cjk = "".join(re.findall(r"[\u3040-\u30ff\u4e00-\u9fff]+", n))
+    key = cjk if cjk and cjk not in _GENERIC and re.search(r"[a-z]", n) else n
+    return ALIASES.get(key, key)
+
+
+def assign_groups(items):
+    """每張券加上 group（同一家店同一個值）。有 MATCHA 的券時用 MATCHA 的 id，讓舊的最愛設定繼續有效。"""
+    by_key = {}
+    for it in items:
+        by_key.setdefault(brand_key(it["store"]), []).append(it)
+    for key, group in by_key.items():
+        sources = {x["source"] for x in group}
+        if len(sources) < 2:  # 只在不同網站之間合併；同網站同名的券各自一列
+            for x in group:
+                x["group"] = x["id"]
+            continue
+        lead = next((x for x in group if x["source"] == "matcha"), group[0])
+        for x in group:
+            x["group"] = lead["id"]
+    return items
+
+
+# ---------- 執行 ----------
+
+SOURCES = ["matcha", "chictrip"]
+
+
+def _fetch_source(name, only, today):
+    if name == "matcha":
+        items, errors, removed = fetch(only, today)
+        return items, errors, removed
+    items, errors = chictrip.fetch(today)
+    return items, errors, []
+
+
 def run(prev, only=None):
-    """回傳要寫出的資料物件。失敗時保留上一版的券，只更新 lastRun。"""
+    """回傳要寫出的資料物件。每個來源各自檢查：失敗的來源保留上一版的券，只記錄失敗。"""
     prev = prev or {}
     prev_items = prev.get("items") or []
-    try:
-        items, errors, removed = fetch(only)
-        problems = health_check(items, prev_items, errors, sample=bool(only))
-    except Exception as ex:
-        traceback.print_exc()
-        problems = [f"{type(ex).__name__}: {ex}"]
-    if problems:
-        return {**prev, "source": "MATCHA", "items": prev_items, "count": len(prev_items),
-                "updatedAt": prev.get("updatedAt"),
-                "lastRun": {"at": _now(), "ok": False, "error": "；".join(problems)[:500]}}
+    prev_src = prev.get("sources") or {}
+    today = date.today().isoformat()
+    now = _now()
+    all_items, status, warnings = [], {}, []
+    for name in (["matcha"] if only else SOURCES):
+        old = [x for x in prev_items if x.get("source", "matcha") == name]
+        try:
+            items, errors, removed = _fetch_source(name, only, today)
+            problems = health_check(items, old, errors, sample=bool(only))
+        except Exception as ex:
+            traceback.print_exc()
+            problems, errors, removed = [f"{type(ex).__name__}: {ex}"], [], []
+        if problems:
+            all_items += [{**x, "source": name} for x in old]
+            status[name] = {"ok": False, "updatedAt": (prev_src.get(name) or {}).get("updatedAt") or prev.get("updatedAt"),
+                            "error": "；".join(problems)[:500], "count": len(old)}
+        else:
+            all_items += items
+            status[name] = {"ok": True, "updatedAt": now, "error": None, "count": len(items)}
+            warnings += errors + removed
+    ok = all(v["ok"] for v in status.values())
+    dates = [v["updatedAt"] for v in status.values() if v["updatedAt"]]
     order = {c: i for i, c in enumerate(CATEGORIES)}
-    items.sort(key=lambda x: order.get(x["category"], 99))
-    return {"source": "MATCHA", "sourceUrl": INDEX_URL, "updatedAt": _now(), "count": len(items),
-            "lastRun": {"at": _now(), "ok": True, "error": None,
-                        "warnings": (errors + removed) or None}, "items": items}
+    all_items.sort(key=lambda x: (order.get(x["category"], 99), SOURCES.index(x.get("source", "matcha"))))
+    assign_groups(all_items)
+    errors_txt = "；".join(f"{k}：{v['error']}" for k, v in status.items() if not v["ok"])
+    return {
+        "source": "MATCHA、去趣 chicTrip",
+        "updatedAt": min(dates) if dates else None,  # 最舊的來源日期（保守）
+        "count": len(all_items),
+        "sources": status,
+        "lastRun": {"at": now, "ok": ok, "error": errors_txt or None, "warnings": warnings or None},
+        "items": all_items,
+    }
 
 
 def main(argv=None):
@@ -413,7 +503,9 @@ def main(argv=None):
         json.dump(data, f, ensure_ascii=False, indent=1)
     # 只印數量與狀態，不印券的內容（Actions 紀錄可能是公開的）
     lr = data["lastRun"]
-    print(f"優惠券：{'成功' if lr['ok'] else '失敗'}，共 {data['count']} 張" + ("" if lr["ok"] else f"（保留上一版）：{lr['error']}"))
+    for name, st in data["sources"].items():
+        print(f"{name}：{'成功' if st['ok'] else '失敗（保留上一版）'}，{st['count']} 張" + ("" if st["ok"] else f"：{st['error']}"))
+    print(f"優惠券：{'成功' if lr['ok'] else '部分失敗'}，共 {data['count']} 張")
     return 0 if lr["ok"] else 1
 
 

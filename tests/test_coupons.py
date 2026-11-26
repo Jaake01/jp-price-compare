@@ -17,6 +17,7 @@ INDEX = """
 <a class="hot-deal-card" href="https://matcha-jp.com/tw/19016?utm_source=matcha"><div>BicCamera 文章</div></a>
 <a class="shop-item" id="tw-bic-camera" href="https://matcha-jp.com/tw/17389?utm_source=matcha"><span class="brand">Bic Camera</span><br><span class="offer">最高17%折扣</span></a>
 <!-- a class="shop-item" id="tw-old" href="https://matcha-jp.com/tw/coupon/1"><span class="brand">舊券</span></a -->
+<a class="shop-item" id="tw-bic-camera" href="https://matcha-jp.com/tw/coupon/77"><span class="brand">Bic 福岡</span></a>
 <h2 class="coupon-category">實體網卡 / eSIM網卡折扣優惠券</h2>
 <a class="shop-item" href="https://esim.matcha-jp.com/?code=matcha"><span class="brand">eSIM</span></a>
 <h2 class="coupon-category">東京免稅店折扣優惠券</h2>
@@ -60,7 +61,7 @@ ARTICLE = """
 class IndexTest(unittest.TestCase):
     def test_parse_index(self):
         es = c.parse_index(INDEX)
-        self.assertEqual([e["key"] for e in es], ["don-quijote", "tomods", "bic-camera", "lotte"])
+        self.assertEqual([e["key"] for e in es], ["don-quijote", "tomods", "bic-camera", "bic-camera-77", "lotte"])
         dq = es[0]
         self.assertEqual((dq["store"], dq["offer"], dq["category"]), ("唐吉訶德", "最高17%折扣", "藥妝雜貨"))
         self.assertEqual(dq["url"], "https://matcha-jp.com/tw/coupon/11")  # 去掉追蹤參數
@@ -69,7 +70,7 @@ class IndexTest(unittest.TestCase):
         self.assertIsNone(es[1]["store"])  # 橫幅沒有店名，之後用券頁的
         self.assertEqual(es[1]["url"], "https://matcha-jp.com/tw/coupon/148")
         self.assertEqual(es[2]["category"], "電器行")
-        self.assertEqual(es[3]["category"], "其他")
+        self.assertEqual(es[4]["category"], "其他")
 
     def test_categories(self):
         self.assertEqual(c.category_of("各地區藥妝店免稅優惠券"), "藥妝雜貨")
@@ -152,18 +153,24 @@ class HealthAndScheduleTest(unittest.TestCase):
         broken = [item(i, discount=c.UNKNOWN, validUntil=c.UNKNOWN) for i in range(10)]
         self.assertTrue(c.health_check(broken, good, []))  # 券頁改版
 
-    def test_failed_run_keeps_previous(self):
-        prev = {"updatedAt": "2026-08-01T00:00:00+00:00", "items": [item(1)], "count": 1}
-        orig = c.fetch
-        c.fetch = lambda only=None: (_ for _ in ()).throw(RuntimeError("網站改版"))  # noqa
+    def test_failed_source_keeps_previous_others_update(self):
+        prev = {"updatedAt": "2026-08-01T00:00:00+00:00", "count": 2,
+                "items": [item(1, category="電器行", source="matcha"), item(2, category="其他", source="chictrip")]}
+        fresh = [item(i, category="藥妝雜貨", source="chictrip", id=f"ct-{i}") for i in range(3)]
+        orig = (c.fetch, c.chictrip.fetch)
+        c.fetch = lambda only=None, today=None: (_ for _ in ()).throw(RuntimeError("網站改版"))  # noqa
+        c.chictrip.fetch = lambda today: (fresh, [])
         try:
             out = c.run(prev)
         finally:
-            c.fetch = orig
-        self.assertEqual(out["items"], prev["items"])
-        self.assertEqual(out["updatedAt"], prev["updatedAt"])
+            c.fetch, c.chictrip.fetch = orig
         self.assertFalse(out["lastRun"]["ok"])
         self.assertIn("網站改版", out["lastRun"]["error"])
+        self.assertFalse(out["sources"]["matcha"]["ok"])
+        self.assertTrue(out["sources"]["chictrip"]["ok"])
+        ids = {x["id"] for x in out["items"]}
+        self.assertEqual(ids, {"c1", "ct-0", "ct-1", "ct-2"})  # MATCHA 保留上一版，去趣換新
+        self.assertEqual(out["updatedAt"], "2026-08-01T00:00:00+00:00")  # 取最舊的來源日期
 
     def test_needs_update(self):
         d = {"updatedAt": "2026-11-01T00:00:00+00:00", "lastRun": {"ok": True},
@@ -189,6 +196,7 @@ class FetchTest(unittest.TestCase):
             "https://matcha-jp.com/tw/coupon/148": ("", "https://matcha-jp.com/tw/coupon"),  # 券已結束
             "https://matcha-jp.com/tw/17389": (ARTICLE, "https://matcha-jp.com/tw/17389"),
             "https://matcha-jp.com/tw/coupon/5": (COUPON, "https://matcha-jp.com/tw/coupon/5"),
+            "https://matcha-jp.com/tw/coupon/77": (COUPON, "https://matcha-jp.com/tw/coupon/77"),
         }
         orig = (c.http.request, c.http.request_full)
         c.http.request = lambda url: INDEX.encode()
@@ -197,6 +205,52 @@ class FetchTest(unittest.TestCase):
             items, errors, removed = c.fetch()
         finally:
             c.http.request, c.http.request_full = orig
-        self.assertEqual([x["id"] for x in items], ["don-quijote", "bic-camera", "lotte"])
+        self.assertEqual([x["id"] for x in items], ["don-quijote", "bic-camera", "bic-camera-77", "lotte"])
         self.assertEqual(errors, [])
         self.assertEqual(len(removed), 1)
+
+
+class GroupTest(unittest.TestCase):
+    def test_brand_key(self):
+        k = c.brand_key
+        self.assertEqual(k("日本 DONKI 唐吉訶德"), k("唐吉訶德"))
+        self.assertEqual(k("YAMADA 山田電機"), k("山田電機"))
+        self.assertEqual(k("SUGI 杉藥局"), k("SUGI杉藥局"))
+        self.assertEqual(k("TSURUHA 鶴羽藥妝"), k("鶴羽藥妝"))
+        self.assertNotEqual(k("TSURUHA 鶴羽藥妝"), k("福岡鶴羽藥妝"))  # 地區版是不同的券
+        self.assertEqual(k("BIC CAMERA+SALONIA"), k("Bic Camera"))
+        self.assertEqual(k("DRUG ELEVEN（Drug 11）"), k("DRUG ELEVEN"))
+        self.assertEqual(k("LADY藥妝"), k("LADY藥局"))
+        self.assertEqual(k("Cocokara Fine"), k("Cocokara Fine"))
+        self.assertEqual(k("Victoria 運動用品"), k("Victoria"))
+        self.assertEqual(k("LOTTE DUTY FREE GINZA 樂天免稅店銀座"), k("樂天免稅 銀座店"))
+        self.assertNotEqual(k("Alpen Group 運動用品"), k("Victoria 運動用品"))
+
+    def test_groups_only_across_sources(self):
+        items = [item(1, store="Bic Camera", source="matcha", id="bic-camera"),
+                 item(2, store="BIC CAMERA+SALONIA", source="chictrip", id="ct-bic"),
+                 item(3, store="JAL ABC", source="matcha", id="jal1"),
+                 item(4, store="JAL ABC", source="matcha", id="jal2")]
+        c.assign_groups(items)
+        self.assertEqual([x["group"] for x in items], ["bic-camera", "bic-camera", "jal1", "jal2"])
+
+
+class ChictripTest(unittest.TestCase):
+    def test_deadline(self):
+        p = c.chictrip.parse_deadline
+        self.assertEqual(p("期限 2027/3/31"), "2027-03-31")
+        self.assertEqual(p("期限至 2026/12/31"), "2026-12-31")
+        self.assertEqual(p("期限2026/12/31"), "2026-12-31")
+        self.assertEqual(p("無期限"), "none")
+        self.assertEqual(p("兌完為止"), "unknown")
+
+    def test_to_item(self):
+        x = {"id": "a1", "title": "BIC CAMERA+SALONIA", "subTitle": "最高退稅10% + 7%折扣", "code": "bic",
+             "imgUrl": "https://storage.chictrip.com.tw/couponicon/bic.jpg", "deadlineText": "期限 2027/04/30",
+             "type": "CouponImage", "imgContentUrl": "https://storage.chictrip.com.tw/coupon/x.jpg?v=1", "redirectUrl": None}
+        it = c.chictrip.to_item(x, "電器行", "2026-11-26")
+        self.assertEqual((it["id"], it["source"], it["category"]), ("ct-bic", "chictrip", "電器行"))
+        self.assertEqual(it["validUntil"], "2027-04-30")
+        self.assertEqual(it["couponImage"], "https://storage.chictrip.com.tw/coupon/x.jpg?v=1")
+        self.assertIsNone(it["couponLink"])
+        self.assertEqual((it["threshold"], it["usage"]), ("unknown", "unknown"))
